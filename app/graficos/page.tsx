@@ -28,7 +28,6 @@ export default async function GraficosPage({ searchParams }: PageProps) {
   const moneda = params.moneda || 'ARS';
   const ruta = params.ruta || 'TODAS';
 
-  // Ejecución paralela en Neon de los 10 módulos de analítica
   const [
     kpis,
     rutas,
@@ -61,14 +60,19 @@ export default async function GraficosPage({ searchParams }: PageProps) {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Selector de Vistas */}
+        {/* Encabezado con Enfoque de Growth & Performance Marketing */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-              Suite de Inteligencia & Revenue Management
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950 text-blue-400 border border-blue-800 tracking-wide uppercase">
+                Growth & Performance Analytics
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mt-1">
+              Panel de Inteligencia de Precios & Revenue
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Monitoreo competitivo integral de Almundo vs OTAs y Aerolíneas
+              Monitoreo del Buy Box, elasticidad de demanda y benchmarking competitivo para optimización de ROAS y CVR
             </p>
           </div>
 
@@ -83,7 +87,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
               href={`/graficos?moneda=${moneda}&ruta=${ruta}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
             >
-              Gráficos & KPIs
+              Gráficos & Playbooks
             </Link>
           </div>
         </div>
@@ -142,29 +146,43 @@ export default async function GraficosPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Resumen Superior */}
+        {/* Resumen Superior de KPIs de Performance */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400 uppercase font-medium">Win Rate Almundo</span>
-            <div className="mt-1 text-2xl font-bold text-amber-400">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 uppercase font-medium">Buy Box / Win Rate Almundo</span>
+              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950 px-1.5 py-0.5 rounded">CVR Booster</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-amber-400">
               {kpis?.win_rate_almundo_pct || 0}%
             </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">% de ofertas liderando la mejor tarifa</p>
           </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400 uppercase font-medium">Gap Promedio vs Mínimo</span>
-            <div className="mt-1 text-2xl font-bold text-slate-100">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 uppercase font-medium">Gap Medio vs Mejor Precio</span>
+              <span className="text-[10px] text-blue-400 font-semibold bg-blue-950 px-1.5 py-0.5 rounded">Elasticidad</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-slate-100">
               +{kpis?.gap_promedio_almundo_pct || 0}%
             </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">Sobreprecio medio respecto al ganador</p>
           </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <span className="text-xs text-slate-400 uppercase font-medium">Cotizaciones Monitoreadas</span>
-            <div className="mt-1 text-2xl font-bold text-blue-400">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 uppercase font-medium">Inventario Monitoreado</span>
+              <span className="text-[10px] text-slate-400 font-semibold bg-slate-800 px-1.5 py-0.5 rounded">Muestra</span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-blue-400">
               {kpis?.total_cotizaciones?.toLocaleString('es-AR') || 0}
             </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">Cotizaciones activas en la base</p>
           </div>
         </div>
 
-        {/* Los 10 Gráficos Organizados por Bloques */}
+        {/* Componente con los 10 Gráficos y sus Callouts de Estrategia */}
         <GraficosDashboard
           moneda={moneda}
           rutaSeleccionada={ruta}
