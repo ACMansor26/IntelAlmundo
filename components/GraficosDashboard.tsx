@@ -51,15 +51,19 @@ const TOOLTIP_STYLE = {
     borderRadius: '8px',
     fontSize: '12px',
     color: '#ffffff',
-    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.3)'
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+    padding: '10px 14px'
   },
   labelStyle: {
-    color: '#ffffff',
-    fontWeight: 600,
-    marginBottom: '4px'
+    color: '#f8fafc',
+    fontWeight: 700,
+    marginBottom: '6px',
+    fontSize: '13px'
   },
   itemStyle: {
-    color: '#f8fafc'
+    color: '#e2e8f0',
+    fontSize: '12px',
+    padding: '2px 0'
   }
 };
 
@@ -87,18 +91,19 @@ export default function GraficosDashboard({
 }: Props) {
   const prefijo = moneda === 'USD' ? 'USD ' : '$ ';
 
-  const formatPrecio = (value: any) => {
+  // Formateadores seguros que preservan el nombre de la serie
+  const formatPrecio = (value: any, name: any) => {
     if (typeof value === 'number') {
-      return [`${prefijo}${Math.round(value).toLocaleString('es-AR')}`, ''];
+      return [`${prefijo}${Math.round(value).toLocaleString('es-AR')}`, name || 'Precio'];
     }
-    return [value, ''];
+    return [value, name];
   };
 
-  const formatPctTooltip = (value: any) => {
+  const formatPctTooltip = (value: any, name: any) => {
     if (typeof value === 'number') {
-      return [`+${value}%`, ''];
+      return [`+${value}%`, name || 'Gap vs Mínimo'];
     }
-    return [value, ''];
+    return [value, name];
   };
 
   const renderLegendText = (value: string) => (
@@ -123,7 +128,7 @@ export default function GraficosDashboard({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 7. Histograma de Oportunidad */}
+          {/* 1. Histograma de Oportunidad */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -156,7 +161,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 8. Cuota de Victorias por Ruta (100% Stacked) */}
+          {/* 2. Cuota de Victorias por Ruta (100% Stacked) */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -176,7 +181,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any) => [`${v}%`, 'Win Share']}
+                    formatter={(v: any, name: any) => [`${v}%`, name]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '6px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo_pct" name="Almundo" stackId="a" fill="#f59e0b" />
@@ -188,7 +193,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 10. Evolución Histórica de Scraping */}
+          {/* 3. Evolución Histórica de Scraping */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -211,8 +216,8 @@ export default function GraficosDashboard({
                     formatter={formatPctTooltip}
                   />
                   <Legend wrapperStyle={{ paddingTop: '6px' }} formatter={renderLegendText} />
-                  <Line type="monotone" dataKey="gap_promedio_almundo" name="Gap Almundo %" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="gap_promedio_despegar" name="Gap Despegar %" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="gap_promedio_almundo" name="Gap Almundo" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="gap_promedio_despegar" name="Gap Despegar" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -235,7 +240,7 @@ export default function GraficosDashboard({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 1. Curva AP */}
+          {/* 4. Curva AP */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -296,7 +301,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 2. Markup vs Canal Directo */}
+          {/* 6. Markup vs Canal Directo */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -316,7 +321,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any) => [`+${v}%`, 'Markup']}
+                    formatter={(v: any, name: any) => [`+${v}%`, name]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '6px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo" name="Almundo" fill="#f59e0b" radius={[3, 3, 0, 0]} />
@@ -343,7 +348,7 @@ export default function GraficosDashboard({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 9. Paridad de Canales TurismoCity vs Kayak */}
+          {/* 7. Paridad de Canales TurismoCity vs Kayak */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -373,7 +378,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 4. Ranking de Visibilidad */}
+          {/* 8. Ranking de Visibilidad */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -393,7 +398,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any) => [`Posición #${v}`, 'Ranking Promedio']}
+                    formatter={(v: any) => [`#${v}`, 'Posición Promedio']}
                   />
                   <Bar dataKey="ranking_promedio" name="Posición Promedio" radius={[0, 4, 4, 0]}>
                     {datosRanking.map((entry, index) => (
@@ -406,7 +411,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 3. Competitividad por Equipaje */}
+          {/* 9. Competitividad por Equipaje */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
@@ -437,7 +442,7 @@ export default function GraficosDashboard({
             </div>
           </div>
 
-          {/* 6. Sensibilidad Día de la Semana */}
+          {/* 10. Sensibilidad Día de la Semana */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-white">
