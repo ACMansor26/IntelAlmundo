@@ -2,6 +2,7 @@
 import {
   getResumenKPIs,
   getRutasDisponibles,
+  getFuentesDisponibles,
   getGraficoAP,
   getGraficoMarkupDirecto,
   getGraficoEquipaje,
@@ -20,6 +21,7 @@ interface PageProps {
   searchParams: Promise<{
     moneda?: string;
     ruta?: string;
+    fuente?: string;
   }>;
 }
 
@@ -27,10 +29,12 @@ export default async function GraficosPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const moneda = params.moneda || 'ARS';
   const ruta = params.ruta || 'TODAS';
+  const fuente = params.fuente || 'TODAS';
 
   const [
     kpis,
     rutas,
+    fuentes,
     datosAP,
     datosMarkup,
     datosEquipaje,
@@ -42,18 +46,19 @@ export default async function GraficosPage({ searchParams }: PageProps) {
     datosParidadCanales,
     datosHistoricoScraping
   ] = await Promise.all([
-    getResumenKPIs(moneda, ruta),
+    getResumenKPIs(moneda, ruta, fuente),
     getRutasDisponibles(moneda),
-    getGraficoAP(moneda, ruta),
-    getGraficoMarkupDirecto(moneda, ruta),
-    getGraficoEquipaje(moneda, ruta),
-    getGraficoRanking(moneda, ruta),
-    getGraficoHeadToHead(moneda),
-    getGraficoDiaSemana(moneda, ruta),
-    getGraficoDistribucionGap(moneda, ruta),
-    getGraficoShareGanadoresRuta(moneda),
+    getFuentesDisponibles(moneda),
+    getGraficoAP(moneda, ruta, fuente),
+    getGraficoMarkupDirecto(moneda, ruta, fuente),
+    getGraficoEquipaje(moneda, ruta, fuente),
+    getGraficoRanking(moneda, ruta, fuente),
+    getGraficoHeadToHead(moneda, fuente),
+    getGraficoDiaSemana(moneda, ruta, fuente),
+    getGraficoDistribucionGap(moneda, ruta, fuente),
+    getGraficoShareGanadoresRuta(moneda, fuente),
     getGraficoParidadCanales(moneda, ruta),
-    getGraficoHistoricoScraping(moneda, ruta)
+    getGraficoHistoricoScraping(moneda, ruta, fuente)
   ]);
 
   return (
@@ -78,13 +83,13 @@ export default async function GraficosPage({ searchParams }: PageProps) {
 
           <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
             <Link
-              href={`/?moneda=${moneda}&ruta=${ruta}`}
+              href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
             >
-              Tabla de Detalle
+              Matriz Almundo
             </Link>
             <Link
-              href={`/graficos?moneda=${moneda}&ruta=${ruta}`}
+              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
             >
               Gráficos & Playbooks
@@ -94,11 +99,13 @@ export default async function GraficosPage({ searchParams }: PageProps) {
 
         {/* Barra de Filtros */}
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4">
+          
+          {/* 1. Selector Moneda */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
             <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800">
               <Link
-                href={`/graficos?moneda=ARS&ruta=TODAS`}
+                href={`/graficos?moneda=ARS&ruta=TODAS&fuente=${fuente}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
                   moneda === 'ARS' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
@@ -106,7 +113,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
                 ARS
               </Link>
               <Link
-                href={`/graficos?moneda=USD&ruta=TODAS`}
+                href={`/graficos?moneda=USD&ruta=TODAS&fuente=${fuente}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
                   moneda === 'USD' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
@@ -116,11 +123,42 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             </div>
           </div>
 
+          {/* 2. Selector Fuente */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuente:</span>
+            <div className="flex flex-wrap gap-1">
+              <Link
+                href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=TODAS`}
+                className={`px-2.5 py-1 text-xs rounded-md border transition ${
+                  fuente === 'TODAS'
+                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                Todas
+              </Link>
+              {fuentes.map((f) => (
+                <Link
+                  key={f}
+                  href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${f}`}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
+                    fuente === f
+                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  {f}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. Selector Ruta */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruta:</span>
             <div className="flex flex-wrap gap-1">
               <Link
-                href={`/graficos?moneda=${moneda}&ruta=TODAS`}
+                href={`/graficos?moneda=${moneda}&ruta=TODAS&fuente=${fuente}`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   ruta === 'TODAS'
                     ? 'bg-blue-900/40 border-blue-500 text-blue-300'
@@ -132,7 +170,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
               {rutas.map((r) => (
                 <Link
                   key={r}
-                  href={`/graficos?moneda=${moneda}&ruta=${r}`}
+                  href={`/graficos?moneda=${moneda}&ruta=${r}&fuente=${fuente}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     ruta === r
                       ? 'bg-blue-900/40 border-blue-500 text-blue-300'
@@ -182,7 +220,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Componente con los 10 Gráficos y sus Callouts de Estrategia */}
+        {/* Componente con los 10 Gráficos */}
         <GraficosDashboard
           moneda={moneda}
           rutaSeleccionada={ruta}

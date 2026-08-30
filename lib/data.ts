@@ -11,27 +11,27 @@ export interface ResumenKPIs {
   mejor_precio_promedio: number;
 }
 
-export interface FilaVuelo {
-  id: number;
-  fuente: string;
-  ruta: string;
+export interface FilaItinerarioAlmundo {
   id_itinerario: string;
   fecha_vuelo: string;
-  dias_anticipacion: number;
   dia_semana_vuelo: string;
+  dias_anticipacion: number;
+  ruta: string;
   aerolinea: string;
-  vendedor: string;
-  posicion_vendedor: number;
   equipaje_incluido: string;
+  fuente: string;
   moneda: string;
-  precio: number;
-  minimo_vuelo: number;
-  es_mejor_precio: string;
   precio_almundo: number | null;
-  gap_vs_almundo_monto: number | null;
-  gap_vs_almundo_pct: number | null;
-  gap_vs_min_monto: number;
-  gap_vs_min_pct: number;
+  posicion_almundo: number | null;
+  mejor_precio_mercado: number;
+  vendedor_ganador: string;
+  precio_despegar: number | null;
+  gap_min_monto: number | null;
+  gap_min_pct: number | null;
+  spread_despegar_monto: number | null;
+  spread_despegar_pct: number | null;
+  estado_almundo: 'WIN' | 'OPORTUNIDAD' | 'MODERADO' | 'DESALINEADO' | 'SIN_OFERTA';
+  accion_playbook: string;
 }
 
 export interface DatosGraficoAP {
@@ -106,9 +106,29 @@ export interface DatosHistoricoScraping {
   gap_promedio_despegar: number;
 }
 
-// --- Métodos de Extracción Base ---
+// --- Listados de Filtros ---
 
-export async function getResumenKPIs(moneda: string = 'ARS', ruta?: string): Promise<ResumenKPIs> {
+export async function getRutasDisponibles(moneda: string = 'ARS'): Promise<string[]> {
+  const rows = await sql`
+    SELECT DISTINCT ruta 
+    FROM precios_vuelos 
+    WHERE moneda = ${moneda} 
+    ORDER BY ruta ASC;
+  `;
+  return rows.map((r: any) => r.ruta);
+}
+
+export async function getFuentesDisponibles(moneda: string = 'ARS'): Promise<string[]> {
+  const rows = await sql`
+    SELECT DISTINCT fuente 
+    FROM precios_vuelos 
+    WHERE moneda = ${moneda} 
+    ORDER BY fuente ASC;
+  `;
+  return rows.map((r: any) => r.fuente);
+}
+
+export async function getResumenKPIs(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<ResumenKPIs> {
   let queryStr = `
     SELECT 
       COUNT(*)::int AS total_cotizaciones,
@@ -129,7 +149,11 @@ export async function getResumenKPIs(moneda: string = 'ARS', ruta?: string): Pro
 
   if (ruta && ruta !== 'TODAS') {
     params.push(ruta);
-    queryStr += ` AND ruta = $2`;
+    queryStr += ` AND ruta = $${params.length}`;
+  }
+  if (fuente && fuente !== 'TODAS') {
+    params.push(fuente);
+    queryStr += ` AND fuente = $${params.length}`;
   }
   queryStr += `;`;
 
@@ -137,30 +161,33 @@ export async function getResumenKPIs(moneda: string = 'ARS', ruta?: string): Pro
   return rows[0] as ResumenKPIs;
 }
 
-export async function getRutasDisponibles(moneda: string = 'ARS'): Promise<string[]> {
-  const rows = await sql`
-    SELECT DISTINCT ruta 
-    FROM precios_vuelos 
-    WHERE moneda = ${moneda} 
-    ORDER BY ruta ASC;
-  `;
-  return rows.map((r: any) => r.ruta);
-}
-
-export async function getTablaPrecios(
+// --- NUEVA MATRIZ OPERATIVA DE ITINERARIOS CENTRADA EN ALMUNDO ---
+export async function getTablaItinerariosAlmundo(
   moneda: string = 'ARS',
   ruta?: string,
-  equipaje?: string
-): Promise<FilaVuelo[]> {
+  equipaje?: string,
+  fuente?: string,
+  segmento?: string
+): Promise<FilaItinerarioAlmundo[]> {
   let queryStr = `
-    SELECT 
-      id, fuente, ruta, id_itinerario, TO_CHAR(fecha_vuelo, 'YYYY-MM-DD') as fecha_vuelo,
-      dias_anticipacion, dia_semana_vuelo, aerolinea, vendedor, posicion_vendedor,
-      equipaje_incluido, moneda, precio, minimo_vuelo, es_mejor_precio,
-      precio_almundo, gap_vs_almundo_monto, gap_vs_almundo_pct,
-      gap_vs_min_monto, gap_vs_min_pct
-    FROM precios_vuelos
-    WHERE moneda = $1
+    WITH vuelos_agrupados AS (
+      SELECT 
+        id_itinerario,
+        TO_CHAR(fecha_vuelo, 'YYYY-MM-DD') AS fecha_vuelo,
+        dia_semana_vuelo,
+        dias_anticipacion,
+        ruta,
+        aerolinea,
+        equipaje_incluido,
+        fuente,
+        moneda,
+        MIN(precio) AS mejor_precio_mercado,
+        (ARRAY_AGG(vendedor ORDER BY precio ASC))[1] AS vendedor_ganador,
+        MIN(precio) FILTER (WHERE vendedor = 'Almundo') AS precio_almundo,
+        MIN(precio) FILTER (WHERE vendedor = 'Despegar') AS precio_despegar,
+        MIN(posicion_vendedor) FILTER (WHERE vendedor = 'Almundo') AS posicion_almundo
+      FROM precios_vuelos
+      WHERE moneda = $1
   `;
   const params: any[] = [moneda];
 
@@ -172,14 +199,85 @@ export async function getTablaPrecios(
     params.push(equipaje);
     queryStr += ` AND equipaje_incluido = $${params.length}`;
   }
+  if (fuente && fuente !== 'TODAS') {
+    params.push(fuente);
+    queryStr += ` AND fuente = $${params.length}`;
+  }
 
-  queryStr += ` ORDER BY fecha_vuelo ASC, precio ASC LIMIT 250;`;
+  queryStr += `
+      GROUP BY id_itinerario, fecha_vuelo, dia_semana_vuelo, dias_anticipacion, ruta, aerolinea, equipaje_incluido, fuente, moneda
+    )
+    SELECT 
+      *,
+      CASE 
+        WHEN precio_almundo IS NOT NULL THEN precio_almundo - mejor_precio_mercado 
+        ELSE NULL 
+      END AS gap_min_monto,
+      CASE 
+        WHEN precio_almundo IS NOT NULL AND mejor_precio_mercado > 0 
+        THEN ROUND(((precio_almundo - mejor_precio_mercado)::numeric / mejor_precio_mercado::numeric) * 100, 1)::float
+        ELSE NULL 
+      END AS gap_min_pct,
+      CASE 
+        WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL 
+        THEN precio_almundo - precio_despegar 
+        ELSE NULL 
+      END AS spread_despegar_monto,
+      CASE 
+        WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL AND precio_despegar > 0 
+        THEN ROUND(((precio_almundo - precio_despegar)::numeric / precio_despegar::numeric) * 100, 1)::float
+        ELSE NULL 
+      END AS spread_despegar_pct
+    FROM vuelos_agrupados
+    WHERE 1=1
+  `;
+
+  // Filtro por Quick Segments de Performance Marketing
+  if (segmento === 'WINS') {
+    queryStr += ` AND precio_almundo IS NOT NULL AND precio_almundo <= mejor_precio_mercado`;
+  } else if (segmento === 'OPORTUNIDADES') {
+    queryStr += ` AND precio_almundo IS NOT NULL AND ((precio_almundo - mejor_precio_mercado)::decimal / mejor_precio_mercado) > 0 AND ((precio_almundo - mejor_precio_mercado)::decimal / mejor_precio_mercado) <= 0.03`;
+  } else if (segmento === 'VS_DESPEGAR') {
+    queryStr += ` AND precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL AND precio_almundo < precio_despegar`;
+  } else if (segmento === 'DESALINEADOS') {
+    queryStr += ` AND precio_almundo IS NOT NULL AND ((precio_almundo - mejor_precio_mercado)::decimal / mejor_precio_mercado) > 0.07`;
+  }
+
+  queryStr += ` ORDER BY fecha_vuelo ASC, gap_min_pct ASC NULLS LAST LIMIT 250;`;
+
   const rows = (await sql.query(queryStr, params)) as any[];
-  return rows as FilaVuelo[];
+
+  return rows.map((r: any) => {
+    let estado: FilaItinerarioAlmundo['estado_almundo'] = 'SIN_OFERTA';
+    let playbook = 'Revisar Conexión de Feed / Inventario';
+
+    if (r.precio_almundo !== null) {
+      const pct = r.gap_min_pct ?? 0;
+      if (pct <= 0) {
+        estado = 'WIN';
+        playbook = '🚀 Escalar Pauta / Bid Top Metas';
+      } else if (pct <= 3.0) {
+        estado = 'OPORTUNIDAD';
+        playbook = '🎯 Activar Cupón / Match Tarifa';
+      } else if (pct <= 7.0) {
+        estado = 'MODERADO';
+        playbook = '💳 Empujar Financiación / Cuotas';
+      } else {
+        estado = 'DESALINEADO';
+        playbook = '⏸️ Bajar Pujas / Pausar KW';
+      }
+    }
+
+    return {
+      ...r,
+      estado_almundo: estado,
+      accion_playbook: playbook
+    };
+  });
 }
 
-// 1. Curva de Anticipación (AP)
-export async function getGraficoAP(moneda: string = 'ARS', ruta?: string): Promise<DatosGraficoAP[]> {
+// (Se mantienen las funciones de gráficos sin cambios)
+export async function getGraficoAP(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosGraficoAP[]> {
   let queryStr = `
     SELECT 
       dias_anticipacion,
@@ -191,18 +289,14 @@ export async function getGraficoAP(moneda: string = 'ARS', ruta?: string): Promi
     WHERE moneda = $1
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
   queryStr += ` GROUP BY dias_anticipacion ORDER BY dias_anticipacion ASC;`;
-
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosGraficoAP[];
 }
 
-// 2. Markup vs Canal Directo
-export async function getGraficoMarkupDirecto(moneda: string = 'ARS', ruta?: string): Promise<DatosMarkupDirecto[]> {
+export async function getGraficoMarkupDirecto(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosMarkupDirecto[]> {
   let queryStr = `
     SELECT 
       aerolinea,
@@ -213,22 +307,14 @@ export async function getGraficoMarkupDirecto(moneda: string = 'ARS', ruta?: str
     WHERE moneda = $1 AND precio_canal_directo IS NOT NULL
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
-  queryStr += `
-    GROUP BY aerolinea
-    HAVING COUNT(*) FILTER (WHERE vendedor IN ('Almundo', 'Despegar', 'Atrápalo')) > 0
-    ORDER BY aerolinea ASC;
-  `;
-
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
+  queryStr += ` GROUP BY aerolinea HAVING COUNT(*) FILTER (WHERE vendedor IN ('Almundo', 'Despegar', 'Atrápalo')) > 0 ORDER BY aerolinea ASC;`;
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosMarkupDirecto[];
 }
 
-// 3. Competitividad por Equipaje
-export async function getGraficoEquipaje(moneda: string = 'ARS', ruta?: string): Promise<DatosEquipaje[]> {
+export async function getGraficoEquipaje(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosEquipaje[]> {
   let queryStr = `
     SELECT 
       equipaje_incluido,
@@ -240,18 +326,14 @@ export async function getGraficoEquipaje(moneda: string = 'ARS', ruta?: string):
     WHERE moneda = $1
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
   queryStr += ` GROUP BY equipaje_incluido ORDER BY equipaje_incluido ASC;`;
-
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosEquipaje[];
 }
 
-// 4. Ranking de Visibilidad
-export async function getGraficoRanking(moneda: string = 'ARS', ruta?: string): Promise<DatosRanking[]> {
+export async function getGraficoRanking(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosRanking[]> {
   let queryStr = `
     SELECT 
       vendedor,
@@ -261,19 +343,15 @@ export async function getGraficoRanking(moneda: string = 'ARS', ruta?: string): 
     WHERE moneda = $1
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
   queryStr += ` GROUP BY vendedor ORDER BY ranking_promedio ASC;`;
-
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosRanking[];
 }
 
-// 5. Head-to-Head: Almundo vs Despegar
-export async function getGraficoHeadToHead(moneda: string = 'ARS'): Promise<DatosHeadToHead[]> {
-  const queryStr = `
+export async function getGraficoHeadToHead(moneda: string = 'ARS', fuente?: string): Promise<DatosHeadToHead[]> {
+  let queryStr = `
     SELECT 
       ruta,
       ROUND(AVG(precio) FILTER (WHERE vendedor = 'Almundo')::numeric, 0)::float AS precio_almundo,
@@ -283,18 +361,15 @@ export async function getGraficoHeadToHead(moneda: string = 'ARS'): Promise<Dato
       )::float AS gap_monto_almundo_vs_despegar
     FROM precios_vuelos
     WHERE moneda = $1
-    GROUP BY ruta
-    HAVING AVG(precio) FILTER (WHERE vendedor = 'Almundo') IS NOT NULL
-       AND AVG(precio) FILTER (WHERE vendedor = 'Despegar') IS NOT NULL
-    ORDER BY ruta ASC;
   `;
-
-  const rows = (await sql.query(queryStr, [moneda])) as any[];
+  const params: any[] = [moneda];
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
+  queryStr += ` GROUP BY ruta HAVING AVG(precio) FILTER (WHERE vendedor = 'Almundo') IS NOT NULL AND AVG(precio) FILTER (WHERE vendedor = 'Despegar') IS NOT NULL ORDER BY ruta ASC;`;
+  const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosHeadToHead[];
 }
 
-// 6. Sensibilidad Día de la Semana
-export async function getGraficoDiaSemana(moneda: string = 'ARS', ruta?: string): Promise<DatosDiaSemana[]> {
+export async function getGraficoDiaSemana(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosDiaSemana[]> {
   let queryStr = `
     SELECT 
       dia_semana_vuelo,
@@ -303,30 +378,21 @@ export async function getGraficoDiaSemana(moneda: string = 'ARS', ruta?: string)
       ROUND(COALESCE(AVG(gap_vs_min_pct) FILTER (WHERE vendedor = 'Atrápalo')::numeric * 100, 0), 1)::float AS atrapalo,
       ROUND(COALESCE(AVG(gap_vs_min_pct) FILTER (WHERE vendedor IN ('Aerolíneas Argentinas', 'JetSmart', 'LATAM'))::numeric * 100, 0), 1)::float AS canal_directo,
       CASE dia_semana_vuelo
-        WHEN 'Lunes' THEN 1
-        WHEN 'Martes' THEN 2
-        WHEN 'Miércoles' THEN 3
-        WHEN 'Jueves' THEN 4
-        WHEN 'Viernes' THEN 5
-        WHEN 'Sábado' THEN 6
-        WHEN 'Domingo' THEN 7
+        WHEN 'Lunes' THEN 1 WHEN 'Martes' THEN 2 WHEN 'Miércoles' THEN 3
+        WHEN 'Jueves' THEN 4 WHEN 'Viernes' THEN 5 WHEN 'Sábado' THEN 6 WHEN 'Domingo' THEN 7
       END AS orden
     FROM precios_vuelos
     WHERE moneda = $1
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
   queryStr += ` GROUP BY dia_semana_vuelo, orden ORDER BY orden ASC;`;
-
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosDiaSemana[];
 }
 
-// 7. NUEVO: Histograma de Oportunidad (Distribución por Rangos de Brecha)
-export async function getGraficoDistribucionGap(moneda: string = 'ARS', ruta?: string): Promise<DatosDistribucionGap[]> {
+export async function getGraficoDistribucionGap(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosDistribucionGap[]> {
   let queryStr = `
     SELECT 
       CASE 
@@ -339,46 +405,22 @@ export async function getGraficoDistribucionGap(moneda: string = 'ARS', ruta?: s
       COUNT(*)::int AS cantidad_vuelos,
       ROUND((COUNT(*)::decimal / SUM(COUNT(*)) OVER ()) * 100, 1)::float AS share_pct,
       CASE 
-        WHEN gap_vs_min_pct <= 0 THEN 1
-        WHEN gap_vs_min_pct <= 0.03 THEN 2
-        WHEN gap_vs_min_pct <= 0.07 THEN 3
-        WHEN gap_vs_min_pct <= 0.15 THEN 4
-        ELSE 5
+        WHEN gap_vs_min_pct <= 0 THEN 1 WHEN gap_vs_min_pct <= 0.03 THEN 2
+        WHEN gap_vs_min_pct <= 0.07 THEN 3 WHEN gap_vs_min_pct <= 0.15 THEN 4 ELSE 5
       END AS orden
     FROM precios_vuelos
     WHERE moneda = $1 AND vendedor = 'Almundo'
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
-  queryStr += `
-    GROUP BY 
-      CASE 
-        WHEN gap_vs_min_pct <= 0 THEN '0% (Win)'
-        WHEN gap_vs_min_pct <= 0.03 THEN '0.1% a 3%'
-        WHEN gap_vs_min_pct <= 0.07 THEN '3.1% a 7%'
-        WHEN gap_vs_min_pct <= 0.15 THEN '7.1% a 15%'
-        ELSE '> 15%'
-      END,
-      CASE 
-        WHEN gap_vs_min_pct <= 0 THEN 1
-        WHEN gap_vs_min_pct <= 0.03 THEN 2
-        WHEN gap_vs_min_pct <= 0.07 THEN 3
-        WHEN gap_vs_min_pct <= 0.15 THEN 4
-        ELSE 5
-      END
-    ORDER BY orden ASC;
-  `;
-
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
+  queryStr += ` GROUP BY 1, 4 ORDER BY orden ASC;`;
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosDistribucionGap[];
 }
 
-// 8. NUEVO: Cuota de Victorias por Ruta (100% Stacked)
-export async function getGraficoShareGanadoresRuta(moneda: string = 'ARS'): Promise<DatosShareGanadoresRuta[]> {
-  const queryStr = `
+export async function getGraficoShareGanadoresRuta(moneda: string = 'ARS', fuente?: string): Promise<DatosShareGanadoresRuta[]> {
+  let queryStr = `
     SELECT 
       ruta,
       ROUND(COALESCE(COUNT(*) FILTER (WHERE vendedor = 'Almundo' AND es_mejor_precio = 'SI')::decimal / NULLIF(COUNT(*) FILTER (WHERE es_mejor_precio = 'SI'), 0) * 100, 0), 1)::float AS almundo_pct,
@@ -387,15 +429,14 @@ export async function getGraficoShareGanadoresRuta(moneda: string = 'ARS'): Prom
       ROUND(COALESCE(COUNT(*) FILTER (WHERE vendedor IN ('Aerolíneas Argentinas', 'JetSmart', 'LATAM') AND es_mejor_precio = 'SI')::decimal / NULLIF(COUNT(*) FILTER (WHERE es_mejor_precio = 'SI'), 0) * 100, 0), 1)::float AS directo_pct
     FROM precios_vuelos
     WHERE moneda = $1
-    GROUP BY ruta
-    ORDER BY ruta ASC;
   `;
-
-  const rows = (await sql.query(queryStr, [moneda])) as any[];
+  const params: any[] = [moneda];
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
+  queryStr += ` GROUP BY ruta ORDER BY ruta ASC;`;
+  const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosShareGanadoresRuta[];
 }
 
-// 9. NUEVO: Paridad de Canales (TurismoCity vs Kayak)
 export async function getGraficoParidadCanales(moneda: string = 'ARS', ruta?: string): Promise<DatosParidadCanales[]> {
   let queryStr = `
     SELECT 
@@ -412,23 +453,13 @@ export async function getGraficoParidadCanales(moneda: string = 'ARS', ruta?: st
     WHERE moneda = $1 AND vendedor IN ('Almundo', 'Despegar', 'Atrápalo', 'JetSmart', 'Aerolíneas Argentinas')
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
-  queryStr += `
-    GROUP BY vendedor
-    HAVING AVG(precio) FILTER (WHERE fuente = 'TurismoCity') IS NOT NULL
-       OR AVG(precio) FILTER (WHERE fuente = 'Kayak') IS NOT NULL
-    ORDER BY vendedor ASC;
-  `;
-
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $2`; }
+  queryStr += ` GROUP BY vendedor HAVING AVG(precio) FILTER (WHERE fuente = 'TurismoCity') IS NOT NULL OR AVG(precio) FILTER (WHERE fuente = 'Kayak') IS NOT NULL ORDER BY vendedor ASC;`;
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosParidadCanales[];
 }
 
-// 10. NUEVO: Evolución Histórica de Competitividad por Fecha de Scraping
-export async function getGraficoHistoricoScraping(moneda: string = 'ARS', ruta?: string): Promise<DatosHistoricoScraping[]> {
+export async function getGraficoHistoricoScraping(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosHistoricoScraping[]> {
   let queryStr = `
     SELECT 
       TO_CHAR(fecha_obtencion, 'DD/MM') AS fecha_obtencion,
@@ -446,12 +477,9 @@ export async function getGraficoHistoricoScraping(moneda: string = 'ARS', ruta?:
     WHERE moneda = $1
   `;
   const params: any[] = [moneda];
-  if (ruta && ruta !== 'TODAS') {
-    params.push(ruta);
-    queryStr += ` AND ruta = $2`;
-  }
+  if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
+  if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
   queryStr += ` GROUP BY fecha_obtencion ORDER BY fecha_obtencion ASC;`;
-
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosHistoricoScraping[];
 }

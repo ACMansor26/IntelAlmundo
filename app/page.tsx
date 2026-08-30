@@ -1,12 +1,14 @@
 // app/page.tsx
-import { getResumenKPIs, getRutasDisponibles, getTablaPrecios } from '@/lib/data';
+import { getResumenKPIs, getRutasDisponibles, getFuentesDisponibles, getTablaItinerariosAlmundo } from '@/lib/data';
 import Link from 'next/link';
 
 interface PageProps {
   searchParams: Promise<{
     moneda?: string;
     ruta?: string;
+    fuente?: string;
     equipaje?: string;
+    segmento?: string;
   }>;
 }
 
@@ -14,12 +16,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const moneda = params.moneda || 'ARS';
   const ruta = params.ruta || 'TODAS';
+  const fuente = params.fuente || 'TODAS';
   const equipaje = params.equipaje || 'TODOS';
+  const segmento = params.segmento || 'TODOS';
 
-  const [kpis, rutas, vuelos] = await Promise.all([
-    getResumenKPIs(moneda, ruta),
+  const [kpis, rutas, fuentes, itinerarios] = await Promise.all([
+    getResumenKPIs(moneda, ruta, fuente),
     getRutasDisponibles(moneda),
-    getTablaPrecios(moneda, ruta, equipaje)
+    getFuentesDisponibles(moneda),
+    getTablaItinerariosAlmundo(moneda, ruta, equipaje, fuente, segmento)
   ]);
 
   const formatoPrecio = (val: number | null) => {
@@ -39,51 +44,55 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const formatoGapPct = (val: number | null) => {
     if (val === null || val === undefined) return '-';
-    const pct = val * 100;
-    const signo = pct > 0 ? '+' : '';
-    return `${signo}${pct.toFixed(1)}%`;
+    const signo = val > 0 ? '+' : '';
+    return `${signo}${val.toFixed(1)}%`;
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Switch de Navegación */}
-<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
-  <div>
-    <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-      Panel de Inteligencia de Precios
-    </h1>
-    <p className="text-slate-400 text-sm mt-1">
-      Monitoreo competitivo de TurismoCity y Kayak vs Almundo
-    </p>
-  </div>
+        {/* Encabezado con Enfoque de Performance */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800 tracking-wide uppercase">
+                Almundo Pricing & Growth Matrix
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mt-1">
+              Matriz Operativa de Decisiones
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Monitoreo itinerario por itinerario de la posición de Almundo vs líderes de mercado
+            </p>
+          </div>
 
-  {/* Selector de Vistas (Tabs) */}
-  <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-    <Link
-      href={`/?moneda=${moneda}&ruta=${ruta}&equipaje=${equipaje}`}
-      className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
-    >
-      Tabla de Detalle
-    </Link>
-    <Link
-      href={`/graficos?moneda=${moneda}&ruta=${ruta}`}
-      className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
-    >
-      Gráficos & KPIs
-    </Link>
-  </div>
-</div>
+          <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+            <Link
+              href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
+              className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
+            >
+              Matriz Almundo
+            </Link>
+            <Link
+              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
+              className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
+            >
+              Gráficos & Playbooks
+            </Link>
+          </div>
+        </div>
 
-        {/* Barra de Filtros */}
+        {/* Barra de Filtros Primarios */}
         <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4">
-          {/* Selector Moneda */}
+          
+          {/* Moneda */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
             <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800">
               <Link
-                href={`/?moneda=ARS&ruta=TODAS&equipaje=${equipaje}`}
+                href={`/?moneda=ARS&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
                   moneda === 'ARS' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
@@ -91,7 +100,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 ARS
               </Link>
               <Link
-                href={`/?moneda=USD&ruta=TODAS&equipaje=${equipaje}`}
+                href={`/?moneda=USD&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
                   moneda === 'USD' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
@@ -101,12 +110,42 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Selector Ruta */}
+          {/* Fuente */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuente:</span>
+            <div className="flex flex-wrap gap-1">
+              <Link
+                href={`/?moneda=${moneda}&ruta=${ruta}&fuente=TODAS&equipaje=${equipaje}&segmento=${segmento}`}
+                className={`px-2.5 py-1 text-xs rounded-md border transition ${
+                  fuente === 'TODAS'
+                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                Todas
+              </Link>
+              {fuentes.map((f) => (
+                <Link
+                  key={f}
+                  href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${f}&equipaje=${equipaje}&segmento=${segmento}`}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
+                    fuente === f
+                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  {f}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Ruta */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruta:</span>
             <div className="flex flex-wrap gap-1">
               <Link
-                href={`/?moneda=${moneda}&ruta=TODAS&equipaje=${equipaje}`}
+                href={`/?moneda=${moneda}&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   ruta === 'TODAS'
                     ? 'bg-blue-900/40 border-blue-500 text-blue-300'
@@ -118,7 +157,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               {rutas.map((r) => (
                 <Link
                   key={r}
-                  href={`/?moneda=${moneda}&ruta=${r}&equipaje=${equipaje}`}
+                  href={`/?moneda=${moneda}&ruta=${r}&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     ruta === r
                       ? 'bg-blue-900/40 border-blue-500 text-blue-300'
@@ -131,14 +170,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Selector Equipaje */}
+          {/* Equipaje */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Equipaje:</span>
             <div className="flex flex-wrap gap-1">
               {['TODOS', 'Solo Mochila', 'Mochila + Carry-on', 'Mano + Bodega'].map((eq) => (
                 <Link
                   key={eq}
-                  href={`/?moneda=${moneda}&ruta=${ruta}&equipaje=${eq}`}
+                  href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${eq}&segmento=${segmento}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     equipaje === eq
                       ? 'bg-blue-900/40 border-blue-500 text-blue-300'
@@ -152,7 +191,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Tarjetas KPI */}
+        {/* Tarjetas KPI Superiores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
             <span className="text-xs text-slate-400 uppercase font-medium">Win Rate Almundo</span>
@@ -162,7 +201,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               }`}>
                 {kpis?.win_rate_almundo_pct || 0}%
               </span>
-              <span className="text-xs text-slate-500">con mejor precio</span>
+              <span className="text-xs text-slate-500">Buy Box</span>
             </div>
           </div>
 
@@ -177,144 +216,222 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <span className="text-xs text-slate-400 uppercase font-medium">Cotizaciones Monitoreadas</span>
+            <span className="text-xs text-slate-400 uppercase font-medium">Vuelos Únicos Monitoreados</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-slate-100">
-                {kpis?.total_cotizaciones?.toLocaleString('es-AR') || 0}
+                {kpis?.total_vuelos_unicos?.toLocaleString('es-AR') || 0}
               </span>
-              <span className="text-xs text-slate-500">registros</span>
+              <span className="text-xs text-slate-500">itinerarios</span>
             </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <span className="text-xs text-slate-400 uppercase font-medium">Mejor Precio Promedio</span>
+            <span className="text-xs text-slate-400 uppercase font-medium">Tarifa Ganadora Media</span>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-blue-400">
+              <span className="text-3xl font-bold text-emerald-400">
                 {formatoPrecio(kpis?.mejor_precio_promedio || 0)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Tabla de Detalle */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">Detalle de Cotizaciones</h2>
-            <span className="text-xs text-slate-400">Mostrando {vuelos.length} registros</span>
+        {/* Tabla Centrada en Almundo */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden space-y-4 p-5">
+          
+          {/* Header de la Tabla con Quick Segment Tabs */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <h2 className="text-base font-semibold text-white">Detalle Operativo por Itinerario</h2>
+              <p className="text-xs text-slate-400">Mostrando {itinerarios.length} vuelos consolidados</p>
+            </div>
+
+            {/* Quick Segment Tabs */}
+            <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+              {[
+                { id: 'TODOS', label: 'Todos los Vuelos' },
+                { id: 'OPORTUNIDADES', label: '🔥 Oportunidades Clave (≤3%)' },
+                { id: 'WINS', label: '🏆 Buy Box Wins' },
+                { id: 'VS_DESPEGAR', label: '⚔️ Ganando a Despegar' },
+                { id: 'DESALINEADOS', label: '⚠️ Desalineados (>7%)' }
+              ].map((tab) => (
+                <Link
+                  key={tab.id}
+                  href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${equipaje}&segmento=${tab.id}`}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition ${
+                    segmento === tab.id
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </div>
           </div>
 
+          {/* Contenedor de la Tabla */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase font-medium border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-3">Fecha Vuelo</th>
-                  <th className="py-3 px-3">Ruta</th>
-                  <th className="py-3 px-3">Vendedor</th>
-                  <th className="py-3 px-2 text-center">Posición</th>
-                  <th className="py-3 px-2 text-center" title="Días de Anticipación (Advance Purchase)">AP</th>
+                  <th className="py-3 px-3">Vuelo & Ruta</th>
+                  <th className="py-3 px-2 text-center" title="Advance Purchase / Lead Time">AP</th>
                   <th className="py-3 px-3">Equipaje</th>
-                  <th className="py-3 px-3 text-right">Precio</th>
                   <th className="py-3 px-3 text-right">Precio Almundo</th>
-                  <th className="py-3 px-3 text-right">Gap Monto</th>
-                  <th className="py-3 px-3 text-right">Gap %</th>
-                  <th className="py-3 px-3 text-center">Fuente</th>
+                  <th className="py-3 px-3 text-right">Líder de Mercado</th>
+                  <th className="py-3 px-3 text-right">Gap vs Líder</th>
+                  <th className="py-3 px-3 text-right">vs Despegar</th>
+                  <th className="py-3 px-3 text-center">Estado Almundo</th>
+                  <th className="py-3 px-3">Playbook de Performance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {vuelos.map((v) => {
-                  const esAlmundo = v.vendedor === 'Almundo';
-                  const gapMonto = esAlmundo ? v.gap_vs_min_monto : v.gap_vs_almundo_monto;
-                  const gapPct = esAlmundo ? v.gap_vs_min_pct : v.gap_vs_almundo_pct;
+                {itinerarios.map((item, idx) => {
+                  const tieneAlmundo = item.precio_almundo !== null;
+                  const esWin = item.estado_almundo === 'WIN';
+                  const esOportunidad = item.estado_almundo === 'OPORTUNIDAD';
+                  const esDesalineado = item.estado_almundo === 'DESALINEADO';
 
                   return (
-                    <tr key={v.id} className="hover:bg-slate-800/30 transition">
-                      {/* 1. Fecha Vuelo */}
-                      <td className="py-3 px-3 font-sans text-slate-300 whitespace-nowrap">
-                        {v.fecha_vuelo} <span className="text-slate-500 text-[11px]">({v.dia_semana_vuelo.slice(0, 3)})</span>
-                      </td>
-
-                      {/* 2. Ruta */}
+                    <tr key={idx} className="hover:bg-slate-800/30 transition">
+                      
+                      {/* 1. Vuelo & Ruta */}
                       <td className="py-3 px-3 font-sans whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-blue-300 font-semibold text-[11px] border border-slate-700">
-                          {v.ruta}
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 font-semibold text-[11px] border border-slate-700">
+                            {item.ruta}
+                          </span>
+                          <span className="text-white font-medium">{item.fecha_vuelo}</span>
+                          <span className="text-slate-500 text-[11px]">({item.dia_semana_vuelo.slice(0, 3)})</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                          <span>{item.aerolinea}</span>
+                          <span>•</span>
+                          <span className="text-slate-500">{item.fuente}</span>
+                        </div>
+                      </td>
+
+                      {/* 2. AP (Lead Time) */}
+                      <td className="py-3 px-2 text-center font-sans">
+                        <span className="text-slate-300 text-[11px] bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                          {item.dias_anticipacion}d
                         </span>
                       </td>
 
-                      {/* 3. Vendedor */}
-                      <td className="py-3 px-3 font-sans">
-                        <span className={`font-semibold ${esAlmundo ? 'text-amber-400' : 'text-white'}`}>
-                          {v.vendedor}
-                        </span>
-                      </td>
-
-                      {/* 4. Posición */}
-                      <td className="py-3 px-2 text-center">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-sans text-[11px]">
-                          #{v.posicion_vendedor || 1}
-                        </span>
-                      </td>
-
-                      {/* 5. AP (Anticipación en días) */}
-                      <td className="py-3 px-2 text-center">
-                        <span className="text-slate-400 font-sans text-[11px]">
-                          {v.dias_anticipacion}d
-                        </span>
-                      </td>
-
-                      {/* 6. Equipaje */}
+                      {/* 3. Equipaje */}
                       <td className="py-3 px-3 font-sans whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded text-[11px] ${
-                          v.equipaje_incluido === 'Mano + Bodega'
+                          item.equipaje_incluido === 'Mano + Bodega'
                             ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
-                            : v.equipaje_incluido === 'Mochila + Carry-on'
+                            : item.equipaje_incluido === 'Mochila + Carry-on'
                             ? 'bg-blue-950 text-blue-300 border border-blue-800'
                             : 'bg-slate-800 text-slate-300'
                         }`}>
-                          {v.equipaje_incluido}
+                          {item.equipaje_incluido}
                         </span>
                       </td>
 
-                      {/* 7. Precio */}
-                      <td className="py-3 px-3 text-right font-semibold text-white whitespace-nowrap">
-                        {formatoPrecio(v.precio)}
-                        {v.es_mejor_precio === 'SI' && (
-                          <span className="ml-1.5 px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-sans font-bold">
-                            WIN
+                      {/* 4. Precio Almundo */}
+                      <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
+                        {tieneAlmundo ? (
+                          <div>
+                            <span className={`font-bold font-mono text-[13px] ${esWin ? 'text-amber-400' : 'text-white'}`}>
+                              {formatoPrecio(item.precio_almundo)}
+                            </span>
+                            <div className="text-[10px] text-slate-400">
+                              Posición #{item.posicion_almundo || 1}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 italic text-[11px]">No disponible</span>
+                        )}
+                      </td>
+
+                      {/* 5. Mejor Precio de Mercado y Ganador */}
+                      <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
+                        <div className="font-bold font-mono text-emerald-400 text-[13px]">
+                          {formatoPrecio(item.mejor_precio_mercado)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate max-w-[130px] ml-auto" title={item.vendedor_ganador}>
+                          {item.vendedor_ganador}
+                        </div>
+                      </td>
+
+                      {/* 6. Gap vs Líder ($ / %) */}
+                      <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
+                        {tieneAlmundo ? (
+                          <div>
+                            <div className={`font-bold ${
+                              esWin ? 'text-emerald-400' : esOportunidad ? 'text-cyan-400' : 'text-rose-400'
+                            }`}>
+                              {formatoGapPct(item.gap_min_pct)}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {formatoGapMonto(item.gap_min_monto)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-600">-</span>
+                        )}
+                      </td>
+
+                      {/* 7. Spread vs Despegar */}
+                      <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
+                        {item.spread_despegar_monto !== null ? (
+                          <div>
+                            <div className={`font-semibold ${
+                              item.spread_despegar_monto < 0 ? 'text-emerald-400' : item.spread_despegar_monto === 0 ? 'text-slate-400' : 'text-rose-400'
+                            }`}>
+                              {formatoGapPct(item.spread_despegar_pct)}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {formatoGapMonto(item.spread_despegar_monto)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-600 text-[11px]">N/D</span>
+                        )}
+                      </td>
+
+                      {/* 8. Badge de Estado Almundo */}
+                      <td className="py-3 px-3 text-center font-sans whitespace-nowrap">
+                        {esWin && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            BUY BOX WIN
+                          </span>
+                        )}
+                        {esOportunidad && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 flex items-center justify-center gap-1">
+                            🎯 OPORTUNIDAD
+                          </span>
+                        )}
+                        {item.estado_almundo === 'MODERADO' && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-300 border border-amber-800/80">
+                            BRECHA MEDIA
+                          </span>
+                        )}
+                        {esDesalineado && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-rose-950/60 text-rose-300 border border-rose-800/80">
+                            DESALINEADO
+                          </span>
+                        )}
+                        {item.estado_almundo === 'SIN_OFERTA' && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-slate-800 text-slate-400">
+                            SIN COBERTURA
                           </span>
                         )}
                       </td>
 
-                      {/* 8. Precio Almundo */}
-                      <td className="py-3 px-3 text-right text-slate-400 whitespace-nowrap">
-                        {v.precio_almundo ? formatoPrecio(v.precio_almundo) : '-'}
+                      {/* 9. Playbook de Performance Marketing */}
+                      <td className="py-3 px-3 font-sans text-xs whitespace-nowrap">
+                        <span className={`text-[11px] font-medium ${
+                          esWin ? 'text-emerald-300 font-semibold' : esOportunidad ? 'text-cyan-300 font-semibold' : 'text-slate-300'
+                        }`}>
+                          {item.accion_playbook}
+                        </span>
                       </td>
 
-                      {/* 9. Gap Monto */}
-                      <td className={`py-3 px-3 text-right whitespace-nowrap ${
-                        gapMonto !== null && gapMonto < 0 
-                          ? 'text-emerald-400' 
-                          : gapMonto !== null && gapMonto > 0 
-                          ? 'text-rose-400' 
-                          : 'text-slate-500'
-                      }`}>
-                        {formatoGapMonto(gapMonto)}
-                      </td>
-
-                      {/* 10. Gap % */}
-                      <td className={`py-3 px-3 text-right whitespace-nowrap font-semibold ${
-                        gapPct !== null && gapPct < 0 
-                          ? 'text-emerald-400' 
-                          : gapPct !== null && gapPct > 0 
-                          ? 'text-rose-400' 
-                          : 'text-slate-500'
-                      }`}>
-                        {formatoGapPct(gapPct)}
-                      </td>
-
-                      {/* 11. Fuente */}
-                      <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px] whitespace-nowrap">
-                        {v.fuente}
-                      </td>
                     </tr>
                   );
                 })}
