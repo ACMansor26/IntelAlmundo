@@ -4,7 +4,7 @@
 import { cookies } from 'next/headers';
 
 export async function loginModalAction(usuario: string, password: string) {
-  const validUser = process.env.DASHBOARD_USER || 'almundo';
+  const validUser = process.env.DASHBOARD_USER || 'cvccorp';
   const validPass = process.env.DASHBOARD_PASSWORD || 'Almundo2026!';
 
   if (usuario.trim() === validUser && password.trim() === validPass) {
