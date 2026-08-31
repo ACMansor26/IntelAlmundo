@@ -49,14 +49,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+    <div className="min-h-screen bg-[#0B1120] text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Enfoque de Performance */}
+        {/* Encabezado con Enfoque de Performance & Almundo Branding */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800 tracking-wide uppercase">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FF5A00]/15 text-[#FF7A29] border border-[#FF5A00]/40 tracking-wider uppercase">
                 Almundo Pricing & Growth Matrix
               </span>
             </div>
@@ -68,10 +68,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </p>
           </div>
 
-          <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+          <div className="inline-flex rounded-lg bg-[#111C30] p-1 border border-slate-800">
             <Link
               href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
-              className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
+              className="px-4 py-1.5 text-xs font-semibold rounded-md bg-[#FF5A00] text-white shadow transition"
             >
               Matriz Almundo
             </Link>
@@ -85,16 +85,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </div>
 
         {/* Barra de Filtros Primarios */}
-        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4">
+        <div className="bg-[#111C30] border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-lg shadow-black/20">
           
           {/* Moneda */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
-            <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+            <div className="inline-flex rounded-lg bg-[#0B1120] p-1 border border-slate-800">
               <Link
                 href={`/?moneda=ARS&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'ARS' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  moneda === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 ARS
@@ -102,7 +102,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               <Link
                 href={`/?moneda=USD&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'USD' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  moneda === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 USD
@@ -118,8 +118,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 href={`/?moneda=${moneda}&ruta=${ruta}&fuente=TODAS&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   fuente === 'TODAS'
-                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
                 Todas
@@ -130,8 +130,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${f}&equipaje=${equipaje}&segmento=${segmento}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     fuente === f
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   {f}
@@ -148,8 +148,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 href={`/?moneda=${moneda}&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   ruta === 'TODAS'
-                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
                 Todas
@@ -160,8 +160,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   href={`/?moneda=${moneda}&ruta=${r}&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     ruta === r
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   {r}
@@ -180,8 +180,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${eq}&segmento=${segmento}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     equipaje === eq
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   {eq}
@@ -193,11 +193,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
         {/* Tarjetas KPI Superiores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
             <span className="text-xs text-slate-400 uppercase font-medium">Win Rate Almundo</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className={`text-3xl font-bold ${
-                (kpis?.win_rate_almundo_pct || 0) >= 30 ? 'text-emerald-400' : 'text-amber-400'
+                (kpis?.win_rate_almundo_pct || 0) >= 30 ? 'text-emerald-400' : 'text-[#FF7A29]'
               }`}>
                 {kpis?.win_rate_almundo_pct || 0}%
               </span>
@@ -205,7 +205,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
             <span className="text-xs text-slate-400 uppercase font-medium">Gap Almundo vs Mínimo</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-slate-100">
@@ -215,17 +215,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
             <span className="text-xs text-slate-400 uppercase font-medium">Vuelos Únicos Monitoreados</span>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-slate-100">
+              <span className="text-3xl font-bold text-sky-400">
                 {kpis?.total_vuelos_unicos?.toLocaleString('es-AR') || 0}
               </span>
               <span className="text-xs text-slate-500">itinerarios</span>
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
             <span className="text-xs text-slate-400 uppercase font-medium">Tarifa Ganadora Media</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-emerald-400">
@@ -236,7 +236,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </div>
 
         {/* Tabla Centrada en Almundo */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden space-y-4 p-5">
+        <div className="bg-[#111C30] border border-slate-800 rounded-xl overflow-hidden space-y-4 p-5 shadow-xl shadow-black/30">
           
           {/* Header de la Tabla con Quick Segment Tabs */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -246,10 +246,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
 
             {/* Quick Segment Tabs */}
-            <div className="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+            <div className="flex flex-wrap gap-1.5 bg-[#0B1120] p-1.5 rounded-lg border border-slate-800">
               {[
                 { id: 'TODOS', label: 'Todos los Vuelos' },
-                { id: 'OPORTUNIDADES', label: '🔥 Oportunidades Clave (≤3%)' },
+                { id: 'OPORTUNIDADES', label: '🎯 Oportunidades Clave (≤3%)' },
                 { id: 'WINS', label: '🏆 Buy Box Wins' },
                 { id: 'VS_DESPEGAR', label: '⚔️ Ganando a Despegar' },
                 { id: 'DESALINEADOS', label: '⚠️ Desalineados (>7%)' }
@@ -259,7 +259,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${equipaje}&segmento=${tab.id}`}
                   className={`px-3 py-1 text-xs font-medium rounded-md transition ${
                     segmento === tab.id
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      ? 'bg-[#FF5A00] text-white font-bold shadow'
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
@@ -272,7 +272,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           {/* Contenedor de la Tabla */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 uppercase font-medium border-b border-slate-800">
+              <thead className="bg-[#0B1120] text-slate-400 uppercase font-medium border-b border-slate-800">
                 <tr>
                   <th className="py-3 px-3">Vuelo & Ruta</th>
                   <th className="py-3 px-2 text-center" title="Advance Purchase / Lead Time">AP</th>
@@ -293,12 +293,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   const esDesalineado = item.estado_almundo === 'DESALINEADO';
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-800/30 transition">
+                    <tr key={idx} className="hover:bg-[#1E293B]/40 transition">
                       
                       {/* 1. Vuelo & Ruta */}
                       <td className="py-3 px-3 font-sans whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 font-semibold text-[11px] border border-slate-700">
+                          <span className="px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 font-semibold text-[11px] border border-sky-800/80">
                             {item.ruta}
                           </span>
                           <span className="text-white font-medium">{item.fecha_vuelo}</span>
@@ -313,7 +313,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
                       {/* 2. AP (Lead Time) */}
                       <td className="py-3 px-2 text-center font-sans">
-                        <span className="text-slate-300 text-[11px] bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                        <span className="text-slate-300 text-[11px] bg-[#0B1120] px-1.5 py-0.5 rounded border border-slate-800">
                           {item.dias_anticipacion}d
                         </span>
                       </td>
@@ -324,7 +324,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           item.equipaje_incluido === 'Mano + Bodega'
                             ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
                             : item.equipaje_incluido === 'Mochila + Carry-on'
-                            ? 'bg-blue-950 text-blue-300 border border-blue-800'
+                            ? 'bg-sky-950 text-sky-300 border border-sky-800'
                             : 'bg-slate-800 text-slate-300'
                         }`}>
                           {item.equipaje_incluido}
@@ -335,7 +335,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
                         {tieneAlmundo ? (
                           <div>
-                            <span className={`font-bold font-mono text-[13px] ${esWin ? 'text-amber-400' : 'text-white'}`}>
+                            <span className={`font-bold font-mono text-[13px] ${esWin ? 'text-[#FF5A00]' : 'text-white'}`}>
                               {formatoPrecio(item.precio_almundo)}
                             </span>
                             <div className="text-[10px] text-slate-400">
@@ -362,7 +362,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                         {tieneAlmundo ? (
                           <div>
                             <div className={`font-bold ${
-                              esWin ? 'text-emerald-400' : esOportunidad ? 'text-cyan-400' : 'text-rose-400'
+                              esWin ? 'text-emerald-400' : esOportunidad ? 'text-sky-400' : 'text-rose-400'
                             }`}>
                               {formatoGapPct(item.gap_min_pct)}
                             </div>
@@ -402,12 +402,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </span>
                         )}
                         {esOportunidad && (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800 flex items-center justify-center gap-1">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-950 text-sky-300 border border-sky-800 flex items-center justify-center gap-1">
                             🎯 OPORTUNIDAD
                           </span>
                         )}
                         {item.estado_almundo === 'MODERADO' && (
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-300 border border-amber-800/80">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#FF5A00]/15 text-[#FF7A29] border border-[#FF5A00]/40">
                             BRECHA MEDIA
                           </span>
                         )}
@@ -426,7 +426,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       {/* 9. Playbook de Performance Marketing */}
                       <td className="py-3 px-3 font-sans text-xs whitespace-nowrap">
                         <span className={`text-[11px] font-medium ${
-                          esWin ? 'text-emerald-300 font-semibold' : esOportunidad ? 'text-cyan-300 font-semibold' : 'text-slate-300'
+                          esWin ? 'text-emerald-300 font-semibold' : esOportunidad ? 'text-sky-300 font-semibold' : 'text-slate-300'
                         }`}>
                           {item.accion_playbook}
                         </span>

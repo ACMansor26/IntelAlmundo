@@ -62,15 +62,15 @@ export default async function GraficosPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+    <div className="min-h-screen bg-[#0B1120] text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Enfoque de Growth & Performance Marketing */}
+        {/* Encabezado con Enfoque de Growth & Almundo Branding */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950 text-blue-400 border border-blue-800 tracking-wide uppercase">
-                Growth & Performance Analytics
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FF5A00]/15 text-[#FF7A29] border border-[#FF5A00]/40 tracking-wider uppercase">
+                Almundo Growth & Performance Analytics
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mt-1">
@@ -81,7 +81,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             </p>
           </div>
 
-          <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
+          <div className="inline-flex rounded-lg bg-[#111C30] p-1 border border-slate-800">
             <Link
               href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
@@ -90,7 +90,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             </Link>
             <Link
               href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
-              className="px-4 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white shadow transition"
+              className="px-4 py-1.5 text-xs font-semibold rounded-md bg-[#FF5A00] text-white shadow transition"
             >
               Gráficos & Playbooks
             </Link>
@@ -98,16 +98,16 @@ export default async function GraficosPage({ searchParams }: PageProps) {
         </div>
 
         {/* Barra de Filtros */}
-        <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4">
+        <div className="bg-[#111C30] border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-lg shadow-black/20">
           
-          {/* 1. Selector Moneda */}
+          {/* Moneda */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
-            <div className="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+            <div className="inline-flex rounded-lg bg-[#0B1120] p-1 border border-slate-800">
               <Link
                 href={`/graficos?moneda=ARS&ruta=TODAS&fuente=${fuente}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'ARS' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  moneda === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 ARS
@@ -115,7 +115,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
               <Link
                 href={`/graficos?moneda=USD&ruta=TODAS&fuente=${fuente}`}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'USD' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  moneda === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 USD
@@ -123,7 +123,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* 2. Selector Fuente */}
+          {/* Fuente */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuente:</span>
             <div className="flex flex-wrap gap-1">
@@ -131,8 +131,8 @@ export default async function GraficosPage({ searchParams }: PageProps) {
                 href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=TODAS`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   fuente === 'TODAS'
-                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
                 Todas
@@ -143,8 +143,8 @@ export default async function GraficosPage({ searchParams }: PageProps) {
                   href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${f}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     fuente === f
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   {f}
@@ -153,7 +153,7 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* 3. Selector Ruta */}
+          {/* Ruta */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruta:</span>
             <div className="flex flex-wrap gap-1">
@@ -161,8 +161,8 @@ export default async function GraficosPage({ searchParams }: PageProps) {
                 href={`/graficos?moneda=${moneda}&ruta=TODAS&fuente=${fuente}`}
                 className={`px-2.5 py-1 text-xs rounded-md border transition ${
                   ruta === 'TODAS'
-                    ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
                 Todas
@@ -173,8 +173,8 @@ export default async function GraficosPage({ searchParams }: PageProps) {
                   href={`/graficos?moneda=${moneda}&ruta=${r}&fuente=${fuente}`}
                   className={`px-2.5 py-1 text-xs rounded-md border transition ${
                     ruta === r
-                      ? 'bg-blue-900/40 border-blue-500 text-blue-300'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
+                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   {r}
@@ -184,23 +184,23 @@ export default async function GraficosPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Resumen Superior de KPIs de Performance */}
+        {/* Resumen Superior de KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-4 shadow-lg shadow-black/20">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 uppercase font-medium">Buy Box / Win Rate Almundo</span>
               <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950 px-1.5 py-0.5 rounded">CVR Booster</span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-amber-400">
+            <div className="mt-2 text-2xl font-bold text-[#FF5A00]">
               {kpis?.win_rate_almundo_pct || 0}%
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">% de ofertas liderando la mejor tarifa</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-4 shadow-lg shadow-black/20">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 uppercase font-medium">Gap Medio vs Mejor Precio</span>
-              <span className="text-[10px] text-blue-400 font-semibold bg-blue-950 px-1.5 py-0.5 rounded">Elasticidad</span>
+              <span className="text-[10px] text-sky-400 font-semibold bg-sky-950 px-1.5 py-0.5 rounded">Elasticidad</span>
             </div>
             <div className="mt-2 text-2xl font-bold text-slate-100">
               +{kpis?.gap_promedio_almundo_pct || 0}%
@@ -208,19 +208,19 @@ export default async function GraficosPage({ searchParams }: PageProps) {
             <p className="text-[11px] text-slate-500 mt-0.5">Sobreprecio medio respecto al ganador</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-4 shadow-lg shadow-black/20">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 uppercase font-medium">Inventario Monitoreado</span>
               <span className="text-[10px] text-slate-400 font-semibold bg-slate-800 px-1.5 py-0.5 rounded">Muestra</span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-blue-400">
+            <div className="mt-2 text-2xl font-bold text-sky-400">
               {kpis?.total_cotizaciones?.toLocaleString('es-AR') || 0}
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">Cotizaciones activas en la base</p>
           </div>
         </div>
 
-        {/* Componente con los 10 Gráficos */}
+        {/* Los 10 Gráficos con Estilo Almundo */}
         <GraficosDashboard
           moneda={moneda}
           rutaSeleccionada={ruta}
