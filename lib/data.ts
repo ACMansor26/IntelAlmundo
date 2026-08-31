@@ -34,6 +34,14 @@ export interface FilaItinerarioAlmundo {
   accion_playbook: string;
 }
 
+export interface ResultadoPaginadoItinerarios {
+  itinerarios: FilaItinerarioAlmundo[];
+  totalRegistros: number;
+  totalPaginas: number;
+  paginaActual: number;
+  tamanoPagina: number;
+}
+
 export interface DatosGraficoAP {
   dias_anticipacion: number;
   almundo: number;
@@ -161,14 +169,19 @@ export async function getResumenKPIs(moneda: string = 'ARS', ruta?: string, fuen
   return rows[0] as ResumenKPIs;
 }
 
-// --- NUEVA MATRIZ OPERATIVA DE ITINERARIOS CENTRADA EN ALMUNDO ---
+// --- MATRIZ OPERATIVA DE ITINERARIOS CON PAGINACIÓN CORREGIDA ---
 export async function getTablaItinerariosAlmundo(
   moneda: string = 'ARS',
   ruta?: string,
   equipaje?: string,
   fuente?: string,
-  segmento?: string
-): Promise<FilaItinerarioAlmundo[]> {
+  segmento?: string,
+  pagina: number = 1,
+  limite: number = 50
+): Promise<ResultadoPaginadoItinerarios> {
+  const paginaSaneada = Math.max(1, pagina);
+  const offset = (paginaSaneada - 1) * limite;
+
   let queryStr = `
     WITH vuelos_agrupados AS (
       SELECT 
@@ -206,33 +219,34 @@ export async function getTablaItinerariosAlmundo(
 
   queryStr += `
       GROUP BY id_itinerario, fecha_vuelo, dia_semana_vuelo, dias_anticipacion, ruta, aerolinea, equipaje_incluido, fuente, moneda
-    )
-    SELECT 
-      *,
-      CASE 
-        WHEN precio_almundo IS NOT NULL THEN precio_almundo - mejor_precio_mercado 
-        ELSE NULL 
-      END AS gap_min_monto,
-      CASE 
-        WHEN precio_almundo IS NOT NULL AND mejor_precio_mercado > 0 
-        THEN ROUND(((precio_almundo - mejor_precio_mercado)::numeric / mejor_precio_mercado::numeric) * 100, 1)::float
-        ELSE NULL 
-      END AS gap_min_pct,
-      CASE 
-        WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL 
-        THEN precio_almundo - precio_despegar 
-        ELSE NULL 
-      END AS spread_despegar_monto,
-      CASE 
-        WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL AND precio_despegar > 0 
-        THEN ROUND(((precio_almundo - precio_despegar)::numeric / precio_despegar::numeric) * 100, 1)::float
-        ELSE NULL 
-      END AS spread_despegar_pct
-    FROM vuelos_agrupados
-    WHERE 1=1
+    ),
+    calculados AS (
+      SELECT 
+        *,
+        CASE 
+          WHEN precio_almundo IS NOT NULL THEN precio_almundo - mejor_precio_mercado 
+          ELSE NULL 
+        END AS gap_min_monto,
+        CASE 
+          WHEN precio_almundo IS NOT NULL AND mejor_precio_mercado > 0 
+          THEN ROUND(((precio_almundo - mejor_precio_mercado)::numeric / mejor_precio_mercado::numeric) * 100, 1)::float
+          ELSE NULL 
+        END AS gap_min_pct,
+        CASE 
+          WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL 
+          THEN precio_almundo - precio_despegar 
+          ELSE NULL 
+        END AS spread_despegar_monto,
+        CASE 
+          WHEN precio_almundo IS NOT NULL AND precio_despegar IS NOT NULL AND precio_despegar > 0 
+          THEN ROUND(((precio_almundo - precio_despegar)::numeric / precio_despegar::numeric) * 100, 1)::float
+          ELSE NULL 
+        END AS spread_despegar_pct
+      FROM vuelos_agrupados
+      WHERE 1=1
   `;
 
-  // Filtro por Quick Segments de Performance Marketing
+  // Filtros de segmento
   if (segmento === 'WINS') {
     queryStr += ` AND precio_almundo IS NOT NULL AND precio_almundo <= mejor_precio_mercado`;
   } else if (segmento === 'OPORTUNIDADES') {
@@ -243,11 +257,28 @@ export async function getTablaItinerariosAlmundo(
     queryStr += ` AND precio_almundo IS NOT NULL AND ((precio_almundo - mejor_precio_mercado)::decimal / mejor_precio_mercado) > 0.07`;
   }
 
-  queryStr += ` ORDER BY fecha_vuelo ASC, gap_min_pct ASC NULLS LAST LIMIT 250;`;
+  params.push(limite);
+  const limitParam = `$${params.length}`;
+  params.push(offset);
+  const offsetParam = `$${params.length}`;
+
+  queryStr += `
+    ),
+    con_conteo AS (
+      SELECT *, (COUNT(*) OVER())::int AS total_registros
+      FROM calculados
+    )
+    SELECT *
+    FROM con_conteo
+    ORDER BY fecha_vuelo ASC, gap_min_pct ASC NULLS LAST
+    LIMIT ${limitParam} OFFSET ${offsetParam};
+  `;
 
   const rows = (await sql.query(queryStr, params)) as any[];
+  const totalRegistros = rows.length > 0 ? (rows[0].total_registros || 0) : 0;
+  const totalPaginas = Math.ceil(totalRegistros / limite) || 1;
 
-  return rows.map((r: any) => {
+  const itinerarios: FilaItinerarioAlmundo[] = rows.map((r: any) => {
     let estado: FilaItinerarioAlmundo['estado_almundo'] = 'SIN_OFERTA';
     let playbook = 'Revisar Conexión de Feed / Inventario';
 
@@ -269,14 +300,39 @@ export async function getTablaItinerariosAlmundo(
     }
 
     return {
-      ...r,
+      id_itinerario: r.id_itinerario,
+      fecha_vuelo: r.fecha_vuelo,
+      dia_semana_vuelo: r.dia_semana_vuelo,
+      dias_anticipacion: r.dias_anticipacion,
+      ruta: r.ruta,
+      aerolinea: r.aerolinea,
+      equipaje_incluido: r.equipaje_incluido,
+      fuente: r.fuente,
+      moneda: r.moneda,
+      precio_almundo: r.precio_almundo,
+      posicion_almundo: r.posicion_almundo,
+      mejor_precio_mercado: r.mejor_precio_mercado,
+      vendedor_ganador: r.vendedor_ganador,
+      precio_despegar: r.precio_despegar,
+      gap_min_monto: r.gap_min_monto,
+      gap_min_pct: r.gap_min_pct,
+      spread_despegar_monto: r.spread_despegar_monto,
+      spread_despegar_pct: r.spread_despegar_pct,
       estado_almundo: estado,
       accion_playbook: playbook
     };
   });
+
+  return {
+    itinerarios,
+    totalRegistros,
+    totalPaginas,
+    paginaActual: paginaSaneada,
+    tamanoPagina: limite
+  };
 }
 
-// (Se mantienen las funciones de gráficos sin cambios)
+// Gráficos
 export async function getGraficoAP(moneda: string = 'ARS', ruta?: string, fuente?: string): Promise<DatosGraficoAP[]> {
   let queryStr = `
     SELECT 
@@ -414,7 +470,21 @@ export async function getGraficoDistribucionGap(moneda: string = 'ARS', ruta?: s
   const params: any[] = [moneda];
   if (ruta && ruta !== 'TODAS') { params.push(ruta); queryStr += ` AND ruta = $${params.length}`; }
   if (fuente && fuente !== 'TODAS') { params.push(fuente); queryStr += ` AND fuente = $${params.length}`; }
-  queryStr += ` GROUP BY 1, 4 ORDER BY orden ASC;`;
+  queryStr += `
+    GROUP BY 
+      CASE 
+        WHEN gap_vs_min_pct <= 0 THEN '0% (Win)'
+        WHEN gap_vs_min_pct <= 0.03 THEN '0.1% a 3%'
+        WHEN gap_vs_min_pct <= 0.07 THEN '3.1% a 7%'
+        WHEN gap_vs_min_pct <= 0.15 THEN '7.1% a 15%'
+        ELSE '> 15%'
+      END,
+      CASE 
+        WHEN gap_vs_min_pct <= 0 THEN 1 WHEN gap_vs_min_pct <= 0.03 THEN 2
+        WHEN gap_vs_min_pct <= 0.07 THEN 3 WHEN gap_vs_min_pct <= 0.15 THEN 4 ELSE 5
+      END
+    ORDER BY orden ASC;
+  `;
   const rows = (await sql.query(queryStr, params)) as any[];
   return rows as DatosDistribucionGap[];
 }
