@@ -4,6 +4,7 @@ import {
   getRutasDisponibles,
   getFuentesDisponibles,
   getAerolineasDisponibles,
+  getRegionesDisponibles,
   getTablaItinerariosAlmundo
 } from '@/lib/data';
 import BarraFiltros from '@/components/BarraFiltros';
@@ -15,6 +16,8 @@ interface PageProps {
     ruta?: string;
     fuente?: string;
     aerolinea?: string;
+    tipo_vuelo?: string;
+    region?: string;
     segmento?: string;
     pagina?: string;
   }>;
@@ -26,15 +29,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const ruta = params.ruta || 'TODAS';
   const fuente = params.fuente || 'TODAS';
   const aerolinea = params.aerolinea || 'TODAS';
+  const tipo_vuelo = params.tipo_vuelo || 'TODOS';
+  const region = params.region || 'TODAS';
   const segmento = params.segmento || 'TODOS';
   const pagina = Math.max(1, parseInt(params.pagina || '1', 10));
 
-  const [kpis, rutas, fuentes, aerolineas, resultadoPaginado] = await Promise.all([
-    getResumenKPIs(moneda, ruta, fuente, aerolinea),
+  const [kpis, rutas, fuentes, aerolineas, regiones, resultadoPaginado] = await Promise.all([
+    getResumenKPIs(moneda, ruta, fuente, aerolinea, tipo_vuelo, region),
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
-    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, segmento, pagina, 50)
+    getRegionesDisponibles(moneda, tipo_vuelo),
+    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, segmento, pagina, 50)
   ]);
 
   const { itinerarios, totalRegistros, totalPaginas, paginaActual, tamanoPagina } = resultadoPaginado;
@@ -64,7 +70,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const buildPageUrl = (targetPage: number, targetSegment?: string) => {
     const seg = targetSegment !== undefined ? targetSegment : segmento;
-    return `/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}&segmento=${seg}&pagina=${targetPage}`;
+    return `/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}&tipo_vuelo=${tipo_vuelo}&region=${region}&segmento=${seg}&pagina=${targetPage}`;
   };
 
   const paginasVisibles: number[] = [];
@@ -83,14 +89,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FF5A00]/15 text-[#FF7A29] border border-[#FF5A00]/40 tracking-wider uppercase">
-                Almundo Pricing & Growth Matrix
+                Almundo Pricing Intelligence — Round-Trip
               </span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white mt-1">
               Matriz Operativa de Decisiones
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              Monitoreo itinerario por itinerario de la posición de Almundo vs líderes de mercado
+              Monitoreo de tarifas de Ida y Vuelta con días de estadía y benchmarking de competidores
             </p>
           </div>
 
@@ -102,7 +108,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               Matriz Almundo
             </Link>
             <Link
-              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}`}
+              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}&tipo_vuelo=${tipo_vuelo}&region=${region}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
             >
               Gráficos & KPIs
@@ -110,15 +116,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Barra de Filtros con Desplegables de Ruta y Aerolínea */}
+        {/* Barra de Filtros con Tipo de Vuelo & Región */}
         <BarraFiltros
           moneda={moneda}
           fuente={fuente}
           ruta={ruta}
           aerolinea={aerolinea}
+          tipoVuelo={tipo_vuelo}
+          region={region}
           rutas={rutas}
           aerolineas={aerolineas}
           fuentes={fuentes}
+          regiones={regiones}
         />
 
         {/* Tarjetas KPI */}
@@ -136,7 +145,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
-            <span className="text-xs text-slate-400 uppercase font-medium">Gap Almundo vs Mínimo</span>
+            <span className="text-xs text-slate-400 uppercase font-medium">Gap vs Mejor Precio</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-slate-100">
                 +{kpis?.gap_promedio_almundo_pct || 0}%
@@ -146,12 +155,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
-            <span className="text-xs text-slate-400 uppercase font-medium">Vuelos Únicos Monitoreados</span>
+            <span className="text-xs text-slate-400 uppercase font-medium">Pares Ida/Vuelta Filtrados</span>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-bold text-sky-400">
                 {kpis?.total_vuelos_unicos?.toLocaleString('es-AR') || 0}
               </span>
-              <span className="text-xs text-slate-500">itinerarios</span>
+              <span className="text-xs text-slate-500">combinaciones</span>
             </div>
           </div>
 
@@ -165,21 +174,21 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Tabla Centrada en Almundo (SIN EQUIPAJE NI PLAYBOOK) */}
+        {/* Tabla Centrada en Almundo (Round-trip) */}
         <div className="bg-[#111C30] border border-slate-800 rounded-xl overflow-hidden space-y-4 p-5 shadow-xl shadow-black/30">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
-              <h2 className="text-base font-semibold text-white">Detalle Operativo por Itinerario</h2>
+              <h2 className="text-base font-semibold text-white">Detalle Operativo por Itinerario Completo</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Mostrando <strong className="text-white">{desdeRegistro}</strong> a <strong className="text-white">{hastaRegistro}</strong> de <strong className="text-sky-400">{totalRegistros}</strong> vuelos filtrados
+                Mostrando <strong className="text-white">{desdeRegistro}</strong> a <strong className="text-white">{hastaRegistro}</strong> de <strong className="text-sky-400">{totalRegistros}</strong> pares de vuelos
               </p>
             </div>
 
             <div className="flex flex-wrap gap-1.5 bg-[#0B1120] p-1.5 rounded-lg border border-slate-800">
               {[
-                { id: 'TODOS', label: 'Todos los Vuelos' },
-                { id: 'OPORTUNIDADES', label: '🎯 Oportunidades Clave (≤3%)' },
+                { id: 'TODOS', label: 'Todos' },
+                { id: 'OPORTUNIDADES', label: '🎯 Oportunidades (≤3%)' },
                 { id: 'WINS', label: '🏆 Buy Box Wins' },
                 { id: 'VS_DESPEGAR', label: '⚔️ Ganando a Despegar' },
                 { id: 'DESALINEADOS', label: '⚠️ Desalineados (>7%)' }
@@ -203,10 +212,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-[#0B1120] text-slate-400 uppercase font-medium border-b border-slate-800">
                 <tr>
-                  <th className="py-3 px-3">Vuelo & Ruta</th>
-                  <th className="py-3 px-2 text-center" title="Advance Purchase / Lead Time">AP</th>
+                  <th className="py-3 px-3">Ruta & Región</th>
+                  <th className="py-3 px-3">Fechas (Ida ➔ Vuelta)</th>
+                  <th className="py-3 px-2 text-center">AP / Est.</th>
                   <th className="py-3 px-3 text-right">Precio Almundo</th>
-                  <th className="py-3 px-3 text-right">Líder de Mercado</th>
+                  <th className="py-3 px-3 text-right">Líder Mercado</th>
                   <th className="py-3 px-3 text-right">Gap vs Líder</th>
                   <th className="py-3 px-3 text-right">vs Despegar</th>
                   <th className="py-3 px-3 text-center">Estado Almundo</th>
@@ -215,7 +225,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {itinerarios.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-500 font-sans text-xs">
+                    <td colSpan={8} className="py-8 text-center text-slate-500 font-sans text-xs">
                       No se encontraron itinerarios para los filtros seleccionados.
                     </td>
                   </tr>
@@ -229,30 +239,43 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     return (
                       <tr key={idx} className="hover:bg-[#1E293B]/40 transition">
                         
-                        {/* 1. Vuelo & Ruta */}
+                        {/* 1. Ruta & Región */}
                         <td className="py-3 px-3 font-sans whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span className="px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 font-semibold text-[11px] border border-sky-800/80">
                               {item.ruta}
                             </span>
-                            <span className="text-white font-medium">{item.fecha_vuelo}</span>
-                            <span className="text-slate-500 text-[11px]">({item.dia_semana_vuelo.slice(0, 3)})</span>
+                            <span className="text-[10px] text-slate-400 bg-[#0B1120] px-1.5 py-0.5 rounded border border-slate-800">
+                              {item.region}
+                            </span>
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                          <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
                             <span className="font-semibold text-slate-300">{item.aerolinea}</span>
                             <span>•</span>
                             <span className="text-slate-500">{item.fuente}</span>
                           </div>
                         </td>
 
-                        {/* 2. AP */}
-                        <td className="py-3 px-2 text-center font-sans">
-                          <span className="text-slate-300 text-[11px] bg-[#0B1120] px-1.5 py-0.5 rounded border border-slate-800">
-                            {item.dias_anticipacion}d
+                        {/* 2. Fechas Ida y Vuelta */}
+                        <td className="py-3 px-3 font-sans whitespace-nowrap">
+                          <div className="text-white font-medium flex items-center gap-1">
+                            <span>{item.fecha_ida.slice(5)}</span>
+                            <span className="text-slate-500">➔</span>
+                            <span>{item.fecha_vuelta.slice(5)}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {item.dia_semana_ida} salida
+                          </div>
+                        </td>
+
+                        {/* 3. Anticipación y Estadía */}
+                        <td className="py-3 px-2 text-center font-sans whitespace-nowrap">
+                          <span className="text-slate-300 text-[11px] bg-[#0B1120] px-2 py-0.5 rounded border border-slate-800">
+                            {item.dias_anticipacion}d / <strong className="text-sky-400">{item.dias_estadia}d</strong>
                           </span>
                         </td>
 
-                        {/* 3. Precio Almundo */}
+                        {/* 4. Precio Almundo */}
                         <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
                           {tieneAlmundo ? (
                             <div>
@@ -268,7 +291,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 4. Mejor Precio */}
+                        {/* 5. Mejor Precio */}
                         <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
                           <div className="font-bold font-mono text-emerald-400 text-[13px]">
                             {formatoPrecio(item.mejor_precio_mercado)}
@@ -278,7 +301,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </div>
                         </td>
 
-                        {/* 5. Gap vs Líder */}
+                        {/* 6. Gap vs Líder */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
                           {tieneAlmundo ? (
                             <div>
@@ -296,7 +319,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 6. Spread vs Despegar */}
+                        {/* 7. Spread vs Despegar */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
                           {item.spread_despegar_monto !== null ? (
                             <div>
@@ -314,7 +337,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 7. Estado Almundo */}
+                        {/* 8. Estado Almundo */}
                         <td className="py-3 px-3 text-center font-sans whitespace-nowrap">
                           {esWin && (
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center gap-1">
