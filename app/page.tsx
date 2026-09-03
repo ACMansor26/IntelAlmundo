@@ -1,5 +1,12 @@
 // app/page.tsx
-import { getResumenKPIs, getRutasDisponibles, getFuentesDisponibles, getTablaItinerariosAlmundo } from '@/lib/data';
+import {
+  getResumenKPIs,
+  getRutasDisponibles,
+  getFuentesDisponibles,
+  getAerolineasDisponibles,
+  getTablaItinerariosAlmundo
+} from '@/lib/data';
+import BarraFiltros from '@/components/BarraFiltros';
 import Link from 'next/link';
 
 interface PageProps {
@@ -7,7 +14,7 @@ interface PageProps {
     moneda?: string;
     ruta?: string;
     fuente?: string;
-    equipaje?: string;
+    aerolinea?: string;
     segmento?: string;
     pagina?: string;
   }>;
@@ -18,19 +25,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const moneda = params.moneda || 'ARS';
   const ruta = params.ruta || 'TODAS';
   const fuente = params.fuente || 'TODAS';
-  const equipaje = params.equipaje || 'TODOS';
+  const aerolinea = params.aerolinea || 'TODAS';
   const segmento = params.segmento || 'TODOS';
   const pagina = Math.max(1, parseInt(params.pagina || '1', 10));
 
-  const [kpis, rutas, fuentes, resultadoPaginado] = await Promise.all([
-    getResumenKPIs(moneda, ruta, fuente),
+  const [kpis, rutas, fuentes, aerolineas, resultadoPaginado] = await Promise.all([
+    getResumenKPIs(moneda, ruta, fuente, aerolinea),
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
-    getTablaItinerariosAlmundo(moneda, ruta, equipaje, fuente, segmento, pagina, 50)
+    getAerolineasDisponibles(moneda),
+    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, segmento, pagina, 50)
   ]);
 
   const { itinerarios, totalRegistros, totalPaginas, paginaActual, tamanoPagina } = resultadoPaginado;
-
   const desdeRegistro = totalRegistros === 0 ? 0 : (paginaActual - 1) * tamanoPagina + 1;
   const hastaRegistro = Math.min(paginaActual * tamanoPagina, totalRegistros);
 
@@ -55,13 +62,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     return `${signo}${val.toFixed(1)}%`;
   };
 
-  // Helper para construir enlaces manteniendo todos los filtros activos
   const buildPageUrl = (targetPage: number, targetSegment?: string) => {
     const seg = targetSegment !== undefined ? targetSegment : segmento;
-    return `/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${equipaje}&segmento=${seg}&pagina=${targetPage}`;
+    return `/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}&segmento=${seg}&pagina=${targetPage}`;
   };
 
-  // Generador de rango de páginas visible (ej: 1, 2, 3, 4...)
   const paginasVisibles: number[] = [];
   const startPage = Math.max(1, paginaActual - 2);
   const endPage = Math.min(totalPaginas, paginaActual + 2);
@@ -73,7 +78,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     <div className="min-h-screen bg-[#0B1120] text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Enfoque de Performance & Almundo Branding */}
+        {/* Encabezado */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
             <div className="flex items-center gap-2">
@@ -97,122 +102,26 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               Matriz Almundo
             </Link>
             <Link
-              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
+              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
             >
-              Gráficos & Playbooks
+              Gráficos & KPIs
             </Link>
           </div>
         </div>
 
-        {/* Barra de Filtros Primarios */}
-        <div className="bg-[#111C30] border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-lg shadow-black/20">
-          
-          {/* Moneda */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
-            <div className="inline-flex rounded-lg bg-[#0B1120] p-1 border border-slate-800">
-              <Link
-                href={`/?moneda=ARS&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                ARS
-              </Link>
-              <Link
-                href={`/?moneda=USD&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                USD
-              </Link>
-            </div>
-          </div>
+        {/* Barra de Filtros con Desplegables de Ruta y Aerolínea */}
+        <BarraFiltros
+          moneda={moneda}
+          fuente={fuente}
+          ruta={ruta}
+          aerolinea={aerolinea}
+          rutas={rutas}
+          aerolineas={aerolineas}
+          fuentes={fuentes}
+        />
 
-          {/* Fuente */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuente:</span>
-            <div className="flex flex-wrap gap-1">
-              <Link
-                href={`/?moneda=${moneda}&ruta=${ruta}&fuente=TODAS&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                  fuente === 'TODAS'
-                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                Todas
-              </Link>
-              {fuentes.map((f) => (
-                <Link
-                  key={f}
-                  href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${f}&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                    fuente === f
-                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {f}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Ruta */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruta:</span>
-            <div className="flex flex-wrap gap-1">
-              <Link
-                href={`/?moneda=${moneda}&ruta=TODAS&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                  ruta === 'TODAS'
-                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                Todas
-              </Link>
-              {rutas.map((r) => (
-                <Link
-                  key={r}
-                  href={`/?moneda=${moneda}&ruta=${r}&fuente=${fuente}&equipaje=${equipaje}&segmento=${segmento}&pagina=1`}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                    ruta === r
-                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {r}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Equipaje */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Equipaje:</span>
-            <div className="flex flex-wrap gap-1">
-              {['TODOS', 'Solo Mochila', 'Mochila + Carry-on', 'Mano + Bodega'].map((eq) => (
-                <Link
-                  key={eq}
-                  href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&equipaje=${eq}&segmento=${segmento}&pagina=1`}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                    equipaje === eq
-                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {eq}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Tarjetas KPI Superiores */}
+        {/* Tarjetas KPI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 shadow-lg shadow-black/20">
             <span className="text-xs text-slate-400 uppercase font-medium">Win Rate Almundo</span>
@@ -256,10 +165,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Tabla Centrada en Almundo con Paginación */}
+        {/* Tabla Centrada en Almundo (SIN EQUIPAJE NI PLAYBOOK) */}
         <div className="bg-[#111C30] border border-slate-800 rounded-xl overflow-hidden space-y-4 p-5 shadow-xl shadow-black/30">
           
-          {/* Header de la Tabla con Quick Segment Tabs */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
               <h2 className="text-base font-semibold text-white">Detalle Operativo por Itinerario</h2>
@@ -268,7 +176,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               </p>
             </div>
 
-            {/* Quick Segment Tabs */}
             <div className="flex flex-wrap gap-1.5 bg-[#0B1120] p-1.5 rounded-lg border border-slate-800">
               {[
                 { id: 'TODOS', label: 'Todos los Vuelos' },
@@ -292,26 +199,23 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          {/* Contenedor de la Tabla */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-[#0B1120] text-slate-400 uppercase font-medium border-b border-slate-800">
                 <tr>
                   <th className="py-3 px-3">Vuelo & Ruta</th>
                   <th className="py-3 px-2 text-center" title="Advance Purchase / Lead Time">AP</th>
-                  <th className="py-3 px-3">Equipaje</th>
                   <th className="py-3 px-3 text-right">Precio Almundo</th>
                   <th className="py-3 px-3 text-right">Líder de Mercado</th>
                   <th className="py-3 px-3 text-right">Gap vs Líder</th>
                   <th className="py-3 px-3 text-right">vs Despegar</th>
                   <th className="py-3 px-3 text-center">Estado Almundo</th>
-                  <th className="py-3 px-3">Playbook de Performance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {itinerarios.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-slate-500 font-sans text-xs">
+                    <td colSpan={7} className="py-8 text-center text-slate-500 font-sans text-xs">
                       No se encontraron itinerarios para los filtros seleccionados.
                     </td>
                   </tr>
@@ -335,33 +239,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             <span className="text-slate-500 text-[11px]">({item.dia_semana_vuelo.slice(0, 3)})</span>
                           </div>
                           <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                            <span>{item.aerolinea}</span>
+                            <span className="font-semibold text-slate-300">{item.aerolinea}</span>
                             <span>•</span>
                             <span className="text-slate-500">{item.fuente}</span>
                           </div>
                         </td>
 
-                        {/* 2. AP (Lead Time) */}
+                        {/* 2. AP */}
                         <td className="py-3 px-2 text-center font-sans">
                           <span className="text-slate-300 text-[11px] bg-[#0B1120] px-1.5 py-0.5 rounded border border-slate-800">
                             {item.dias_anticipacion}d
                           </span>
                         </td>
 
-                        {/* 3. Equipaje */}
-                        <td className="py-3 px-3 font-sans whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded text-[11px] ${
-                            item.equipaje_incluido === 'Mano + Bodega'
-                              ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
-                              : item.equipaje_incluido === 'Mochila + Carry-on'
-                              ? 'bg-sky-950 text-sky-300 border border-sky-800'
-                              : 'bg-slate-800 text-slate-300'
-                          }`}>
-                            {item.equipaje_incluido}
-                          </span>
-                        </td>
-
-                        {/* 4. Precio Almundo */}
+                        {/* 3. Precio Almundo */}
                         <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
                           {tieneAlmundo ? (
                             <div>
@@ -377,7 +268,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 5. Mejor Precio de Mercado y Ganador */}
+                        {/* 4. Mejor Precio */}
                         <td className="py-3 px-3 text-right font-sans whitespace-nowrap">
                           <div className="font-bold font-mono text-emerald-400 text-[13px]">
                             {formatoPrecio(item.mejor_precio_mercado)}
@@ -387,7 +278,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </div>
                         </td>
 
-                        {/* 6. Gap vs Líder ($ / %) */}
+                        {/* 5. Gap vs Líder */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
                           {tieneAlmundo ? (
                             <div>
@@ -405,7 +296,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 7. Spread vs Despegar */}
+                        {/* 6. Spread vs Despegar */}
                         <td className="py-3 px-3 text-right whitespace-nowrap font-mono">
                           {item.spread_despegar_monto !== null ? (
                             <div>
@@ -423,7 +314,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 8. Badge de Estado Almundo */}
+                        {/* 7. Estado Almundo */}
                         <td className="py-3 px-3 text-center font-sans whitespace-nowrap">
                           {esWin && (
                             <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center gap-1">
@@ -453,15 +344,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 9. Playbook de Performance Marketing */}
-                        <td className="py-3 px-3 font-sans text-xs whitespace-nowrap">
-                          <span className={`text-[11px] font-medium ${
-                            esWin ? 'text-emerald-300 font-semibold' : esOportunidad ? 'text-sky-300 font-semibold' : 'text-slate-300'
-                          }`}>
-                            {item.accion_playbook}
-                          </span>
-                        </td>
-
                       </tr>
                     );
                   })
@@ -470,19 +352,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             </table>
           </div>
 
-          {/* BARRA DE CONTROLES DE PAGINACIÓN */}
+          {/* Paginación */}
           {totalPaginas > 1 && (
             <div className="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 font-sans text-xs">
-              
-              {/* Resumen de Página Actual */}
               <div className="text-slate-400 text-center sm:text-left">
                 Página <span className="font-semibold text-white">{paginaActual}</span> de <span className="font-semibold text-white">{totalPaginas}</span>
               </div>
 
-              {/* Botonera de Páginas */}
               <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                
-                {/* Botón Anterior */}
                 <Link
                   href={buildPageUrl(Math.max(1, paginaActual - 1))}
                   className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1 ${
@@ -495,7 +372,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   ← Anterior
                 </Link>
 
-                {/* Primera Página (si estamos lejos) */}
                 {startPage > 1 && (
                   <>
                     <Link
@@ -508,7 +384,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   </>
                 )}
 
-                {/* Páginas Centrales Dinámicas */}
                 {paginasVisibles.map((p) => (
                   <Link
                     key={p}
@@ -523,7 +398,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   </Link>
                 ))}
 
-                {/* Última Página (si estamos lejos) */}
                 {endPage < totalPaginas && (
                   <>
                     {endPage < totalPaginas - 1 && <span className="px-1 text-slate-600">...</span>}
@@ -536,7 +410,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   </>
                 )}
 
-                {/* Botón Siguiente */}
                 <Link
                   href={buildPageUrl(Math.min(totalPaginas, paginaActual + 1))}
                   className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1 ${
@@ -548,7 +421,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 >
                   Siguiente →
                 </Link>
-
               </div>
             </div>
           )}

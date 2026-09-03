@@ -3,9 +3,9 @@ import {
   getResumenKPIs,
   getRutasDisponibles,
   getFuentesDisponibles,
+  getAerolineasDisponibles,
   getGraficoAP,
   getGraficoMarkupDirecto,
-  getGraficoEquipaje,
   getGraficoRanking,
   getGraficoHeadToHead,
   getGraficoDiaSemana,
@@ -14,6 +14,7 @@ import {
   getGraficoParidadCanales,
   getGraficoHistoricoScraping
 } from '@/lib/data';
+import BarraFiltros from '@/components/BarraFiltros';
 import GraficosDashboard from '@/components/GraficosDashboard';
 import Link from 'next/link';
 
@@ -22,6 +23,7 @@ interface PageProps {
     moneda?: string;
     ruta?: string;
     fuente?: string;
+    aerolinea?: string;
   }>;
 }
 
@@ -30,14 +32,15 @@ export default async function GraficosPage({ searchParams }: PageProps) {
   const moneda = params.moneda || 'ARS';
   const ruta = params.ruta || 'TODAS';
   const fuente = params.fuente || 'TODAS';
+  const aerolinea = params.aerolinea || 'TODAS';
 
   const [
     kpis,
     rutas,
     fuentes,
+    aerolineas,
     datosAP,
     datosMarkup,
-    datosEquipaje,
     datosRanking,
     datosHeadToHead,
     datosDiaSemana,
@@ -46,26 +49,26 @@ export default async function GraficosPage({ searchParams }: PageProps) {
     datosParidadCanales,
     datosHistoricoScraping
   ] = await Promise.all([
-    getResumenKPIs(moneda, ruta, fuente),
+    getResumenKPIs(moneda, ruta, fuente, aerolinea),
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
-    getGraficoAP(moneda, ruta, fuente),
-    getGraficoMarkupDirecto(moneda, ruta, fuente),
-    getGraficoEquipaje(moneda, ruta, fuente),
-    getGraficoRanking(moneda, ruta, fuente),
-    getGraficoHeadToHead(moneda, fuente),
-    getGraficoDiaSemana(moneda, ruta, fuente),
-    getGraficoDistribucionGap(moneda, ruta, fuente),
-    getGraficoShareGanadoresRuta(moneda, fuente),
-    getGraficoParidadCanales(moneda, ruta),
-    getGraficoHistoricoScraping(moneda, ruta, fuente)
+    getAerolineasDisponibles(moneda),
+    getGraficoAP(moneda, ruta, fuente, aerolinea),
+    getGraficoMarkupDirecto(moneda, ruta, fuente, aerolinea),
+    getGraficoRanking(moneda, ruta, fuente, aerolinea),
+    getGraficoHeadToHead(moneda, fuente, aerolinea),
+    getGraficoDiaSemana(moneda, ruta, fuente, aerolinea),
+    getGraficoDistribucionGap(moneda, ruta, fuente, aerolinea),
+    getGraficoShareGanadoresRuta(moneda, fuente, aerolinea),
+    getGraficoParidadCanales(moneda, ruta, aerolinea),
+    getGraficoHistoricoScraping(moneda, ruta, fuente, aerolinea)
   ]);
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 p-6 md:p-10 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Encabezado con Enfoque de Growth & Almundo Branding */}
+        {/* Encabezado */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
             <div className="flex items-center gap-2">
@@ -83,108 +86,32 @@ export default async function GraficosPage({ searchParams }: PageProps) {
 
           <div className="inline-flex rounded-lg bg-[#111C30] p-1 border border-slate-800">
             <Link
-              href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
+              href={`/?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}`}
               className="px-4 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white transition"
             >
               Matriz Almundo
             </Link>
             <Link
-              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}`}
+              href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${fuente}&aerolinea=${aerolinea}`}
               className="px-4 py-1.5 text-xs font-semibold rounded-md bg-[#FF5A00] text-white shadow transition"
             >
-              Gráficos & Playbooks
+              Gráficos & KPIs
             </Link>
           </div>
         </div>
 
-        {/* Barra de Filtros */}
-        <div className="bg-[#111C30] border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-4 shadow-lg shadow-black/20">
-          
-          {/* Moneda */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Moneda:</span>
-            <div className="inline-flex rounded-lg bg-[#0B1120] p-1 border border-slate-800">
-              <Link
-                href={`/graficos?moneda=ARS&ruta=TODAS&fuente=${fuente}`}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                ARS
-              </Link>
-              <Link
-                href={`/graficos?moneda=USD&ruta=TODAS&fuente=${fuente}`}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition ${
-                  moneda === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                USD
-              </Link>
-            </div>
-          </div>
+        {/* Barra de Filtros con Desplegables */}
+        <BarraFiltros
+          moneda={moneda}
+          fuente={fuente}
+          ruta={ruta}
+          aerolinea={aerolinea}
+          rutas={rutas}
+          aerolineas={aerolineas}
+          fuentes={fuentes}
+        />
 
-          {/* Fuente */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fuente:</span>
-            <div className="flex flex-wrap gap-1">
-              <Link
-                href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=TODAS`}
-                className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                  fuente === 'TODAS'
-                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                Todas
-              </Link>
-              {fuentes.map((f) => (
-                <Link
-                  key={f}
-                  href={`/graficos?moneda=${moneda}&ruta=${ruta}&fuente=${f}`}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                    fuente === f
-                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {f}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Ruta */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ruta:</span>
-            <div className="flex flex-wrap gap-1">
-              <Link
-                href={`/graficos?moneda=${moneda}&ruta=TODAS&fuente=${fuente}`}
-                className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                  ruta === 'TODAS'
-                    ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                    : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                Todas
-              </Link>
-              {rutas.map((r) => (
-                <Link
-                  key={r}
-                  href={`/graficos?moneda=${moneda}&ruta=${r}&fuente=${fuente}`}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition ${
-                    ruta === r
-                      ? 'bg-[#FF5A00]/20 border-[#FF5A00] text-[#FF7A29] font-medium'
-                      : 'bg-[#0B1120] border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  {r}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Resumen Superior de KPIs */}
+        {/* Resumen Superior */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-4 shadow-lg shadow-black/20">
             <div className="flex items-center justify-between">
@@ -220,13 +147,13 @@ export default async function GraficosPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Los 10 Gráficos con Estilo Almundo */}
+        {/* Gráficos */}
         <GraficosDashboard
           moneda={moneda}
           rutaSeleccionada={ruta}
+          aerolineaSeleccionada={aerolinea}
           datosAP={datosAP}
           datosMarkup={datosMarkup}
-          datosEquipaje={datosEquipaje}
           datosRanking={datosRanking}
           datosHeadToHead={datosHeadToHead}
           datosDiaSemana={datosDiaSemana}

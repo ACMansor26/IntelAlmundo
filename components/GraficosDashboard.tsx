@@ -19,7 +19,6 @@ import {
 import {
   DatosGraficoAP,
   DatosMarkupDirecto,
-  DatosEquipaje,
   DatosRanking,
   DatosHeadToHead,
   DatosDiaSemana,
@@ -32,9 +31,9 @@ import {
 interface Props {
   moneda: string;
   rutaSeleccionada: string;
+  aerolineaSeleccionada: string;
   datosAP: DatosGraficoAP[];
   datosMarkup: DatosMarkupDirecto[];
-  datosEquipaje: DatosEquipaje[];
   datosRanking: DatosRanking[];
   datosHeadToHead: DatosHeadToHead[];
   datosDiaSemana: DatosDiaSemana[];
@@ -44,7 +43,6 @@ interface Props {
   datosHistoricoScraping: DatosHistoricoScraping[];
 }
 
-// Estilo Almundo para tooltips
 const TOOLTIP_STYLE = {
   contentStyle: {
     backgroundColor: '#111C30',
@@ -68,9 +66,10 @@ const TOOLTIP_STYLE = {
   }
 };
 
-const COLOR_ALMUNDO = '#FF5A00'; // Naranja Almundo Oficial
+const COLOR_ALMUNDO = '#FF5A00';
 const COLOR_DESPEGAR = '#3B82F6';
 const COLOR_ATRAPALO = '#EC4899';
+const COLOR_TURISMOCITY = '#A855F7';
 const COLOR_DIRECTO = '#10B981';
 
 const COLORES_HISTOGRAMA: Record<string, string> = {
@@ -83,10 +82,8 @@ const COLORES_HISTOGRAMA: Record<string, string> = {
 
 export default function GraficosDashboard({
   moneda,
-  rutaSeleccionada,
   datosAP,
   datosMarkup,
-  datosEquipaje,
   datosRanking,
   datosHeadToHead,
   datosDiaSemana,
@@ -118,15 +115,13 @@ export default function GraficosDashboard({
   return (
     <div className="space-y-12">
 
-      {/* =========================================================================
-          BLOQUE 1: REVENUE MANAGEMENT & LOW-HANGING FRUIT
-         ========================================================================= */}
+      {/* BLOQUE 1: REVENUE MANAGEMENT & OPORTUNIDADES CLAVE */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-[#FF5A00] animate-pulse"></span>
-              I. Revenue Management & Conversiones Incrementales (Low-Hanging Fruit)
+              I. Revenue Management & Conversiones Incrementales
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Identificación de micro-brechas de precio para maximizar Conversion Rate (CVR) y Share de Mercado
@@ -173,19 +168,18 @@ export default function GraficosDashboard({
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> Qué porcentaje del catálogo está a distancia mínima de ganar la venta.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Impacto en CVR:</strong> Los vuelos en el rango <span className="text-sky-300 font-semibold">0.1% a 3%</span> representan conversiones perdidas por spreads marginales.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Activar cupones dinámicos o micro-rebajas para capturar este volumen sin erosionar el margen medio.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Impacto en CVR:</strong> Los vuelos en el rango <span className="text-sky-300 font-semibold">0.1% a 3%</span> representan conversiones perdidas por spreads marginales recuperables.</p>
             </div>
           </div>
 
-          {/* 2. Cuota de Victorias por Ruta (100% Stacked) */}
+          {/* 2. Cuota de Victorias por Ruta (INCLUYE TURISMOCITY) */}
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">2. Share de Victorias (Buy Box)</h3>
                 <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">Share of Voice</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Porcentaje de vuelos donde cada competidor lidera el precio mínimo por ruta</p>
+              <p className="text-[11px] text-slate-400 mt-1">Porcentaje de vuelos donde cada competidor lidera el precio mínimo</p>
             </div>
 
             <div className="h-56 w-full">
@@ -204,6 +198,7 @@ export default function GraficosDashboard({
                   <Bar dataKey="almundo_pct" name="Almundo" stackId="a" fill={COLOR_ALMUNDO} />
                   <Bar dataKey="despegar_pct" name="Despegar" stackId="a" fill={COLOR_DESPEGAR} />
                   <Bar dataKey="atrapalo_pct" name="Atrápalo" stackId="a" fill={COLOR_ATRAPALO} />
+                  <Bar dataKey="turismocity_pct" name="TurismoCity" stackId="a" fill={COLOR_TURISMOCITY} />
                   <Bar dataKey="directo_pct" name="Directo" stackId="a" fill={COLOR_DIRECTO} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -212,18 +207,17 @@ export default function GraficosDashboard({
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> La dominancia en el Buy Box del metabuscador por ruta específica.</p>
               <p className="text-slate-300"><strong className="text-sky-400">Impacto en CTR:</strong> Ganar el mejor precio multiplica el CTR del metabuscador hasta 3x.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Aumentar puja (Bid Modifiers) en rutas ganadoras y reducir inversión en rutas con pérdida de precio.</p>
             </div>
           </div>
 
-          {/* 3. Histórico de Competitividad */}
+          {/* 3. Histórico de Competitividad (TODOS LOS COMPETIDORES) */}
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">3. Histórico de Competitividad</h3>
+                <h3 className="text-sm font-semibold text-white">3. Histórico de Competitividad Multicompetidor</h3>
                 <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">Tracking</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Evolución de la brecha de pricing a lo largo de las fechas de captura</p>
+              <p className="text-[11px] text-slate-400 mt-1">Evolución del gap % de todos los competidores vs mejor tarifa</p>
             </div>
 
             <div className="h-56 w-full">
@@ -239,25 +233,25 @@ export default function GraficosDashboard({
                     formatter={formatPctTooltip}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Line type="monotone" dataKey="gap_promedio_almundo" name="Gap Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="gap_promedio_despegar" name="Gap Despegar" stroke={COLOR_DESPEGAR} strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="gap_promedio_almundo" name="Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="gap_promedio_despegar" name="Despegar" stroke={COLOR_DESPEGAR} strokeWidth={1.5} dot={{ r: 2.5 }} />
+                  <Line type="monotone" dataKey="gap_promedio_atrapalo" name="Atrápalo" stroke={COLOR_ATRAPALO} strokeWidth={1.5} dot={{ r: 2.5 }} />
+                  <Line type="monotone" dataKey="gap_promedio_turismocity" name="TurismoCity" stroke={COLOR_TURISMOCITY} strokeWidth={1.5} dot={{ r: 2.5 }} />
+                  <Line type="monotone" dataKey="gap_promedio_directo" name="Canal Directo" stroke={COLOR_DIRECTO} strokeWidth={1.5} strokeDasharray="3 3" dot={{ r: 2.5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> La tendencia de competitividad antes y después de cambios de pricing o promociones.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Impacto en ROAS:</strong> Correlaciona si las campañas de Paid Media se lanzaron con precios competitivos.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Intensificar pauta en Google/Meta Ads en los días en que la brecha vs Despegar se achica.</p>
+              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> La tendencia de competitividad de Almundo frente a toda la industria a través de las capturas.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Impacto en ROAS:</strong> Refleja si las optimizaciones comerciales permitieron achicar la brecha con el mercado.</p>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* =========================================================================
-          BLOQUE 2: COMPETITIVIDAD DIRECTA & BOOKING WINDOW (AP)
-         ========================================================================= */}
+      {/* BLOQUE 2: COMPETITIVIDAD DIRECTA & BOOKING WINDOW */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
@@ -266,11 +260,11 @@ export default function GraficosDashboard({
               II. Competitividad Directa & Booking Window (Lead Time)
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Elasticidad de compra según días de anticipación y benchmarking contra OTAs y aerolíneas
+              Elasticidad según días de anticipación y sobreprecios de OTAs sobre webs oficiales de aerolíneas
             </p>
           </div>
           <span className="hidden sm:inline-block text-[11px] font-mono bg-sky-950/60 text-sky-300 border border-sky-800/80 px-2.5 py-1 rounded-full">
-            FOCO: FUNNEL & BOOKING LEAD TIME
+            FOCO: LEAD TIME & MARKUPS
           </span>
         </div>
 
@@ -302,14 +296,14 @@ export default function GraficosDashboard({
                   <Line type="monotone" dataKey="almundo" name="Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="despegar" name="Despegar" stroke={COLOR_DESPEGAR} strokeWidth={1.5} dot={{ r: 2.5 }} />
                   <Line type="monotone" dataKey="atrapalo" name="Atrápalo" stroke={COLOR_ATRAPALO} strokeWidth={1.5} dot={{ r: 2.5 }} />
+                  <Line type="monotone" dataKey="canal_directo" name="Directo" stroke={COLOR_DIRECTO} strokeWidth={1.5} strokeDasharray="3 3" dot={{ r: 2.5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> En qué ventana de compra (Last Minute vs Anticipada) Almundo es más competitivo.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Elasticidad:</strong> Compras de última hora (2-4d) son inelásticas (urgencia); compras lejanas son de alta sensibilidad de precio.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Mantener margen en última hora; afinar precios en ventanas $+7$ días para captar tráfico de planificación.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Elasticidad:</strong> Compras de última hora (2-4d) son inelásticas (urgencia); compras de más de 7 días son de alta sensibilidad.</p>
             </div>
           </div>
 
@@ -343,20 +337,19 @@ export default function GraficosDashboard({
             </div>
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> El spread absoluto contra el mayor competidor de pauta digital del país.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Impacto en Paid Search:</strong> Define el éxito en campañas de conquista de marca (Search Competitors).</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Activar anuncios con copys de pricing agresivo en las rutas donde Almundo le gana a Despegar.</p>
+              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> El spread absoluto contra el principal rival OTA del mercado.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Impacto en Paid Search:</strong> Define la efectividad de campañas de conquista de marca (Search Competitors).</p>
             </div>
           </div>
 
-          {/* 6. Markup vs Canal Directo */}
+          {/* 6. Markup vs Canal Directo (INCLUYE TURISMOCITY Y TODAS LAS AEROLÍNEAS COMO LATAM) */}
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">6. Markup vs Canal Directo</h3>
+                <h3 className="text-sm font-semibold text-white">6. Markup vs Canal Directo por Aerolínea</h3>
                 <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded">Leakage Risk</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Recargo de cada OTA sobre la tarifa oficial de la aerolínea</p>
+              <p className="text-[11px] text-slate-400 mt-1">Recargo de cada OTA sobre la tarifa oficial de cada aerolínea</p>
             </div>
 
             <div className="h-56 w-full">
@@ -374,46 +367,45 @@ export default function GraficosDashboard({
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
                   <Bar dataKey="despegar" name="Despegar" fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="atrapalo" name="Atrápalo" fill={COLOR_ATRAPALO} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="turismocity" name="TurismoCity" fill={COLOR_TURISMOCITY} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> El sobreprecio aplicado respecto a comprar directamente en la aerolínea.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Riesgo de Fuga:</strong> Si el markup supera el 5%, el usuario abandona la metabúsqueda y compra directo.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Comunicar facilidades de pago (cuotas sin interés) para compensar la diferencia.</p>
+              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> El sobreprecio de las agencias respecto al canal oficial de la aerolínea (Aerolíneas Arg., LATAM, JetSmart).</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Riesgo de Fuga:</strong> Si el markup supera el 5%, el usuario abandona la compra en la agencia y compra directo.</p>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* =========================================================================
-          BLOQUE 3: SEGMENTACIÓN OPERATIVA, CANALES & VISIBILIDAD
-         ========================================================================= */}
+      {/* BLOQUE 3: METABUSCADORES, VISIBILIDAD & DÍA DE LA SEMANA */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-emerald-400"></span>
-              III. Segmentación de Audiencias, Paridad de Canales & Visibilidad
+              III. Paridad de Canales, Visibilidad & Dayparting
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Optimización de Ad Rank en metabuscadores, paridad de canales afiliados y segmentación por día/franquicia
+              Consistencia entre TurismoCity y Kayak, posición en pantalla y patrones por día de vuelo
             </p>
           </div>
           <span className="hidden sm:inline-block text-[11px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/80 px-2.5 py-1 rounded-full">
-            FOCO: AD RANK & DAYPARTING
+            FOCO: AD RANK & CHANNELS
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* 7. Paridad de Canales TurismoCity vs Kayak */}
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">7. Paridad de Canales: TurismoCity vs Kayak</h3>
+                <h3 className="text-sm font-semibold text-white">7. Paridad: TurismoCity vs Kayak</h3>
                 <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded">Channel Parity</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1">Consistencia de tarifas publicadas entre ambos metabuscadores</p>
@@ -440,8 +432,7 @@ export default function GraficosDashboard({
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> Discrepancias de precio entre feeds de afiliados y metabuscadores.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Impacto en Canibalización:</strong> Precios dispares entre canales canibalizan el ROAS y dañan el Quality Score de los feeds.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Auditar caching y reglas de markups por partner ID para evitar arbitrajes negativos.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Impacto:</strong> Evita canibalizaciones y arbitrajes negativos de precios entre canales.</p>
             </div>
           </div>
 
@@ -449,10 +440,10 @@ export default function GraficosDashboard({
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">8. Visibilidad en Pantalla (Ad Rank / Posición)</h3>
+                <h3 className="text-sm font-semibold text-white">8. Visibilidad en Pantalla (Ad Rank)</h3>
                 <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">Above the Fold</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Posición media en el listado de agencias (Posición #1 = Mayor Click Share)</p>
+              <p className="text-[11px] text-slate-400 mt-1">Posición media en el listado de agencias (#1 = Mayor Visibilidad)</p>
             </div>
 
             <div className="h-56 w-full">
@@ -480,55 +471,17 @@ export default function GraficosDashboard({
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> La ubicación visual promedio en el listado de cotizaciones.</p>
               <p className="text-slate-300"><strong className="text-sky-400">Click Share:</strong> El Top 3 concentra más del 80% de los clics salientes (Above the fold).</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Ajustar pricing en rutas clave para escalar al Top 3 y evitar pérdida de visibilidad en el feed.</p>
             </div>
           </div>
 
-          {/* 9. Competitividad por Equipaje */}
+          {/* 9. Sensibilidad Día de la Semana */}
           <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">9. Competitividad por Franquicia de Equipaje</h3>
-                <span className="text-[10px] bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded">Product Tiering</span>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">Gap % respecto a la tarifa mínima según franquicia de equipaje</p>
-            </div>
-
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosEquipaje} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="equipaje_incluido" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE.contentStyle}
-                    labelStyle={TOOLTIP_STYLE.labelStyle}
-                    itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={formatPctTooltip}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="despegar" name="Despegar" fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="canal_directo" name="Directo" fill={COLOR_DIRECTO} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> Competitividad en tarifas base (mochila) vs tarifas con equipaje de bodega.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">AOV vs Adquisición:</strong> "Solo mochila" tracciona clics de adquisición; "bodega" maximiza el Average Order Value (AOV).</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Destinar campañas de tráfico frío a tarifas base y retargeting a paquetes con equipaje.</p>
-            </div>
-          </div>
-
-          {/* 10. Sensibilidad Día de la Semana */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">10. Sensibilidad por Día de Vuelo (Dayparting)</h3>
+                <h3 className="text-sm font-semibold text-white">9. Sensibilidad por Día de Vuelo</h3>
                 <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded">Schedule Bidding</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">Variación de la brecha de precio según el día de la semana de salida</p>
+              <p className="text-[11px] text-slate-400 mt-1">Variación de la brecha de precio según el día de salida</p>
             </div>
 
             <div className="h-56 w-full">
@@ -552,9 +505,8 @@ export default function GraficosDashboard({
             </div>
 
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> Días con mayor presión competitiva según tipo de viaje (Ocio vs Corporativo).</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Impacto en Paid Media:</strong> Optimiza las pujas de Google/Meta según el día de vuelo más rentable.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Playbook:</strong> Incrementar pauta para salidas en los días donde Almundo ofrece el spread más competitivo.</p>
+              <p className="text-slate-300"><strong className="text-[#FF5A00]">¿Qué mide?:</strong> Días con mayor presión competitiva según el tipo de viaje (Ocio vs Corporativo).</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Impacto:</strong> Permite programar campañas en días con mayor ventaja de precio.</p>
             </div>
           </div>
 
