@@ -137,6 +137,25 @@ export interface DatosRanking {
   ranking_promedio: number;
 }
 
+export interface DatosEvolucionTemporal {
+  fecha: string;
+  almundo: number | null;
+  despegar: number | null;
+  canal_directo: number | null;
+}
+
+export interface DatosGapMonedaRuta {
+  ruta: string;
+  gap_ars: number | null;
+  gap_usd: number | null;
+}
+
+export interface DatosCorrelacionPosicion {
+  vendedor: string;
+  posicion_cuando_mejor_precio: number | null;
+  posicion_cuando_no_mejor_precio: number | null;
+}
+
 // ==============================================================================
 // 3. HELPER DE FILTROS SQL
 // ==============================================================================
@@ -187,6 +206,38 @@ function normalizarFiltros(
   }
 
   return { whereSql: whereClauses.join(' AND '), params, filtros: f };
+}
+
+// Helper para el grafico de Gap ARS vs USD por ruta bimonetaria: necesita
+// TODOS los filtros salvo moneda (si no, el filtro de moneda de la pagina
+// -que siempre es ARS o USD, nunca "ambas"- haria imposible comparar las
+// dos monedas en el mismo grafico).
+function construirWhereSinMoneda(f: FiltrosDashboard): { whereSql: string; params: any[] } {
+  const whereClauses: string[] = ['1=1'];
+  const params: any[] = [];
+
+  if (f.ruta && f.ruta !== 'TODAS') {
+    params.push(f.ruta);
+    whereClauses.push(`ruta = $${params.length}`);
+  }
+  if (f.fuente && f.fuente !== 'TODAS') {
+    params.push(f.fuente);
+    whereClauses.push(`fuente = $${params.length}`);
+  }
+  if (f.aerolinea && f.aerolinea !== 'TODAS') {
+    params.push(f.aerolinea);
+    whereClauses.push(`aerolinea = $${params.length}`);
+  }
+  if (f.tipo_vuelo && f.tipo_vuelo !== 'TODOS') {
+    params.push(f.tipo_vuelo);
+    whereClauses.push(`tipo_vuelo = $${params.length}`);
+  }
+  if (f.region && f.region !== 'TODAS') {
+    params.push(f.region);
+    whereClauses.push(`region = $${params.length}`);
+  }
+
+  return { whereSql: whereClauses.join(' AND '), params };
 }
 
 // ==============================================================================
@@ -702,7 +753,7 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
     // 9. Visibilidad en Pantalla (Ad Rank Promedio)
     const qRanking = await client.query(
       `
-      SELECT 
+      SELECT
         vendedor,
         ROUND(AVG(posicion_vendedor), 2) AS ranking_promedio
       FROM precios_vuelos
@@ -710,6 +761,67 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
         AND vendedor IN ('Almundo', 'Despegar', 'TurismoCity', 'Atrápalo', 'Smiles')
       GROUP BY vendedor
       ORDER BY ranking_promedio ASC;
+      `,
+      params
+    );
+
+    // 10. Evolucion Temporal del Gap (dia a dia)
+    const qEvolucion = await client.query(
+      `
+      SELECT
+        TO_CHAR(DATE(fecha_obtencion), 'YYYY-MM-DD') AS fecha,
+        ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS almundo,
+        ROUND(AVG(CASE WHEN vendedor = 'Despegar' THEN gap_vs_min_pct * 100 END), 1) AS despegar,
+        ROUND(AVG(CASE WHEN tipo_vendedor = 'AEROLINEA' THEN gap_vs_min_pct * 100 END), 1) AS canal_directo
+      FROM precios_vuelos
+      WHERE ${whereSql}
+      GROUP BY DATE(fecha_obtencion)
+      ORDER BY DATE(fecha_obtencion) ASC;
+      `,
+      params
+    );
+
+    // 11. Gap Almundo: ARS vs USD por ruta bimonetaria. Usa un WHERE propio
+    // SIN moneda (construirWhereSinMoneda) -- si no, el filtro de moneda de
+    // la pagina (siempre ARS o USD, nunca las dos) haria imposible comparar.
+    const { whereSql: whereSinMoneda, params: paramsSinMoneda } = construirWhereSinMoneda(filtros);
+    const qGapMoneda = await client.query(
+      `
+      WITH rutas_bimonetarias AS (
+        SELECT ruta
+        FROM precios_vuelos
+        WHERE ${whereSinMoneda}
+        GROUP BY ruta
+        HAVING COUNT(DISTINCT moneda) = 2
+      )
+      SELECT
+        ruta,
+        ROUND(AVG(CASE WHEN moneda = 'ARS' AND vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS gap_ars,
+        ROUND(AVG(CASE WHEN moneda = 'USD' AND vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS gap_usd
+      FROM precios_vuelos
+      WHERE ${whereSinMoneda} AND ruta IN (SELECT ruta FROM rutas_bimonetarias)
+      GROUP BY ruta
+      ORDER BY ruta ASC;
+      `,
+      paramsSinMoneda
+    );
+
+    // 12. Correlacion Precio vs Posicion en Pantalla (Ad Rank): compara la
+    // posicion promedio de cada vendedor cuando SI es el mas barato del
+    // vuelo vs cuando NO lo es -- revela si el precio competitivo se
+    // traduce en mejor visibilidad o si hay un techo de posicionamiento
+    // independiente del precio.
+    const qCorrelacionPosicion = await client.query(
+      `
+      SELECT
+        vendedor,
+        ROUND(AVG(CASE WHEN es_mejor_precio = 'SI' THEN posicion_vendedor END), 2) AS posicion_cuando_mejor_precio,
+        ROUND(AVG(CASE WHEN es_mejor_precio = 'NO' THEN posicion_vendedor END), 2) AS posicion_cuando_no_mejor_precio
+      FROM precios_vuelos
+      WHERE ${whereSql}
+        AND vendedor IN ('Almundo', 'Despegar', 'TurismoCity', 'Atrápalo')
+      GROUP BY vendedor
+      ORDER BY vendedor ASC;
       `,
       params
     );
@@ -767,6 +879,22 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       datosRanking: qRanking.rows.map(r => ({
         vendedor: r.vendedor,
         ranking_promedio: Number(Number(r.ranking_promedio || 0).toFixed(1))
+      })),
+      datosEvolucionTemporal: qEvolucion.rows.map(r => ({
+        fecha: r.fecha,
+        almundo: r.almundo !== null ? Number(r.almundo) : null,
+        despegar: r.despegar !== null ? Number(r.despegar) : null,
+        canal_directo: r.canal_directo !== null ? Number(r.canal_directo) : null
+      })),
+      datosGapMoneda: qGapMoneda.rows.map(r => ({
+        ruta: r.ruta,
+        gap_ars: r.gap_ars !== null ? Number(r.gap_ars) : null,
+        gap_usd: r.gap_usd !== null ? Number(r.gap_usd) : null
+      })),
+      datosCorrelacionPosicion: qCorrelacionPosicion.rows.map(r => ({
+        vendedor: r.vendedor,
+        posicion_cuando_mejor_precio: r.posicion_cuando_mejor_precio !== null ? Number(r.posicion_cuando_mejor_precio) : null,
+        posicion_cuando_no_mejor_precio: r.posicion_cuando_no_mejor_precio !== null ? Number(r.posicion_cuando_no_mejor_precio) : null
       }))
     };
   } finally {

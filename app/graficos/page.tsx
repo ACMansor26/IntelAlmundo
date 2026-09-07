@@ -227,6 +227,9 @@ export default async function GraficosPage(props: PageProps) {
         datosShareGanadoresRuta={datos.datosShareGanadoresRuta}
         datosMarkup={datos.datosMarkup}
         datosRanking={datos.datosRanking}
+        datosEvolucionTemporal={datos.datosEvolucionTemporal}
+        datosGapMoneda={datos.datosGapMoneda}
+        datosCorrelacionPosicion={datos.datosCorrelacionPosicion}
       />
     </main>
   );

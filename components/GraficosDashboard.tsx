@@ -26,7 +26,10 @@ import {
   DatosDiaSemana,
   DatosShareGanadoresRuta,
   DatosMarkupDirecto,
-  DatosRanking
+  DatosRanking,
+  DatosEvolucionTemporal,
+  DatosGapMonedaRuta,
+  DatosCorrelacionPosicion
 } from '@/lib/data';
 
 interface Props {
@@ -42,6 +45,9 @@ interface Props {
   datosShareGanadoresRuta: DatosShareGanadoresRuta[];
   datosMarkup: DatosMarkupDirecto[];
   datosRanking: DatosRanking[];
+  datosEvolucionTemporal: DatosEvolucionTemporal[];
+  datosGapMoneda: DatosGapMonedaRuta[];
+  datosCorrelacionPosicion: DatosCorrelacionPosicion[];
 }
 
 const TOOLTIP_STYLE = {
@@ -72,6 +78,10 @@ const COLOR_DESPEGAR = '#3B82F6';
 const COLOR_TURISMOCITY = '#A855F7';
 const COLOR_ATRAPALO = '#EC4899';
 const COLOR_DIRECTO = '#10B981';
+const COLOR_ARS = '#FF5A00';
+const COLOR_USD = '#22D3EE';
+const COLOR_MEJOR_PRECIO = '#10B981';
+const COLOR_NO_MEJOR_PRECIO = '#EF4444';
 
 const COLORES_HISTOGRAMA: Record<string, string> = {
   '0% (Win)': '#10B981',
@@ -91,7 +101,10 @@ export default function GraficosDashboard({
   datosDiaSemana,
   datosShareGanadoresRuta,
   datosMarkup,
-  datosRanking
+  datosRanking,
+  datosEvolucionTemporal,
+  datosGapMoneda,
+  datosCorrelacionPosicion
 }: Props) {
   const prefijo = moneda === 'USD' ? 'USD ' : '$ ';
 
@@ -548,6 +561,136 @@ export default function GraficosDashboard({
             <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[#FF5A00]">Click Share:</strong> Estar en las 2 primeras posiciones captura más del 80% de los clics salientes.</p>
               <p className="text-slate-300"><strong className="text-sky-400">Visibilidad:</strong> Una posición promedio &gt; #3 reduce drásticamente el CTR aunque el precio sea competitivo.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ===================================================================== */}
+      {/* BLOQUE IV: EVOLUCION TEMPORAL & ANALISIS CAMBIARIO                    */}
+      {/* ===================================================================== */}
+      <div>
+        <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-cyan-400"></span>
+              IV. Evolución Temporal & Análisis Cambiario
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Tendencia de brecha día a día, paridad ARS/USD en rutas bimonetarias y relación precio-visibilidad
+            </p>
+          </div>
+          <span className="hidden sm:inline-block text-[11px] font-mono bg-cyan-950/60 text-cyan-300 border border-cyan-800/80 px-2.5 py-1 rounded-full">
+            TENDENCIA Y RIESGO CAMBIARIO
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* 10. Evolución Temporal del Gap */}
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">10. Evolución del Gap (Día a Día)</h3>
+                <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded">Tendencia</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Brecha porcentual promedio por fecha de corrida del scraper</p>
+            </div>
+
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={datosEvolucionTemporal} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                  <XAxis dataKey="fecha" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 9 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE.contentStyle}
+                    labelStyle={TOOLTIP_STYLE.labelStyle}
+                    itemStyle={TOOLTIP_STYLE.itemStyle}
+                    formatter={formatPctTooltip}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
+                  <Line type="monotone" dataKey="almundo" name="Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+                  <Line type="monotone" dataKey="despegar" name="Despegar" stroke={COLOR_DESPEGAR} strokeWidth={1.5} dot={{ r: 2.5 }} connectNulls />
+                  <Line type="monotone" dataKey="canal_directo" name="Directo" stroke={COLOR_DIRECTO} strokeWidth={1.5} strokeDasharray="3 3" dot={{ r: 2.5 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-cyan-400">Lectura diaria:</strong> Con pocas corridas acumuladas la curva va a verse corta; gana valor real a medida que se suman días de scraping.</p>
+              <p className="text-slate-300"><strong className="text-[#FF7A29]">Alerta temprana:</strong> Un salto sostenido en la brecha de Almundo señala un desalineamiento que conviene corregir antes de que se acumulen varios días.</p>
+            </div>
+          </div>
+
+          {/* 11. Gap Almundo: ARS vs USD por ruta bimonetaria */}
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">11. Paridad Cambiaria (ARS vs USD)</h3>
+                <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded">Riesgo FX</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Brecha promedio de Almundo por moneda, solo en rutas con oferta en ambas</p>
+            </div>
+
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={datosGapMoneda} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                  <XAxis dataKey="ruta" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE.contentStyle}
+                    labelStyle={TOOLTIP_STYLE.labelStyle}
+                    itemStyle={TOOLTIP_STYLE.itemStyle}
+                    formatter={formatPctTooltip}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
+                  <Bar dataKey="gap_ars" name="ARS" fill={COLOR_ARS} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="gap_usd" name="USD" fill={COLOR_USD} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-cyan-400">Barra faltante:</strong> Si no aparece una de las dos barras, Almundo no tiene oferta en esa moneda para esa ruta — no es un empate a 0%.</p>
+              <p className="text-slate-300"><strong className="text-[#FF7A29]">Hipótesis a validar:</strong> Un gap sistemáticamente peor en USD sugiere un problema de actualización de tipo de cambio o de inventario en dólares, no de precio real.</p>
+            </div>
+          </div>
+
+          {/* 12. Correlación Precio vs Posición en Pantalla */}
+          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">12. Precio vs Posición en Pantalla</h3>
+                <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded">Diagnóstico</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Posición promedio de cada vendedor cuando es el más barato vs cuando no lo es</p>
+            </div>
+
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={datosCorrelacionPosicion} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                  <XAxis dataKey="vendedor" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} reversed domain={[1, 'dataMax + 0.5']} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE.contentStyle}
+                    labelStyle={TOOLTIP_STYLE.labelStyle}
+                    itemStyle={TOOLTIP_STYLE.itemStyle}
+                    formatter={(v: any, name: any) => [v !== null && v !== undefined ? `#${Number(v).toFixed(1)}` : 'N/D', name]}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
+                  <Bar dataKey="posicion_cuando_mejor_precio" name="Cuando es el más barato" fill={COLOR_MEJOR_PRECIO} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="posicion_cuando_no_mejor_precio" name="Cuando NO es el más barato" fill={COLOR_NO_MEJOR_PRECIO} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-emerald-400">Sin diferencia:</strong> Si las dos barras de un vendedor son parecidas, su posición en pantalla no depende del precio — puede haber un acuerdo comercial u otro criterio de ranking.</p>
+              <p className="text-slate-300"><strong className="text-rose-400">Techo de posición:</strong> Barra roja alta pese a precio bajo sugiere que ser el más barato no alcanza para mejorar la visibilidad de Almundo.</p>
             </div>
           </div>
 
