@@ -23,6 +23,13 @@ interface Props {
   fuentes?: string[];
   regiones?: string[];
   tiposVuelo?: string[];
+
+  // Conteos por opcion (mejora #5): "AEP-COR (18)" en vez de solo "AEP-COR".
+  // Opcionales -- si no llegan, el select funciona igual pero sin el numero.
+  conteoRutas?: Record<string, number>;
+  conteoRegiones?: Record<string, number>;
+  conteoAerolineas?: Record<string, number>;
+  conteoFuentes?: Record<string, number>;
 }
 
 const FUENTES_DEFAULT = ['TurismoCity', 'Kayak'];
@@ -52,6 +59,14 @@ const TIPOS_VUELO_DEFAULT = ['INTERNACIONAL', 'DOMESTICO'];
 const etiquetar = (valor: string) =>
   valor.charAt(0).toUpperCase() + valor.slice(1).toLowerCase();
 
+// Sufijo "(N)" para una opcion de select, si hay conteo disponible para ese
+// valor exacto. Sin el conteo (prop no pasada, o valor no encontrado en el
+// mapa) el label queda igual que antes.
+const conCantidad = (label: string, valor: string, conteos?: Record<string, number>) => {
+  if (!conteos || !(valor in conteos)) return label;
+  return `${label} (${conteos[valor]})`;
+};
+
 export default function BarraFiltros(props: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -72,6 +87,15 @@ export default function BarraFiltros(props: Props) {
   const listaRegiones = props.regiones && props.regiones.length > 0 ? props.regiones : REGIONES_DEFAULT;
   const listaTiposVuelo = props.tiposVuelo && props.tiposVuelo.length > 0 ? props.tiposVuelo : TIPOS_VUELO_DEFAULT;
 
+  // Mejora #3: un select/toggle se resalta con borde naranja tenue cuando su
+  // valor no es el default ("TODAS"/"TODOS") -- da un vistazo rapido de que
+  // filtros estan activos sin tener que leer cada chip.
+  const activo = (valor: string) => valor !== 'TODAS' && valor !== 'TODOS';
+  const claseChip = (esActivo: boolean) =>
+    `flex items-center gap-2 border rounded-lg px-3 py-2 transition-colors ${
+      esActivo ? 'bg-[#FF5A00]/[0.06] border-[#FF5A00]/40' : 'bg-[#050810] border-white/10'
+    }`;
+
   const actualizarFiltro = (clave: string, valor: string) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -91,6 +115,36 @@ export default function BarraFiltros(props: Props) {
     });
   };
 
+  // Mejora #4: "Limpiar filtros" -- resetea ruta/región/aerolínea/metabuscador
+  // (no moneda ni tipo de vuelo, que son mas un modo de vista que un filtro
+  // de recorte) y solo se muestra si alguno de esos esta activo.
+  const hayFiltrosActivos = activo(fuenteAct) || activo(rutaAct) || activo(aeroAct) || activo(regionAct);
+  const limpiarFiltros = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('fuente');
+    params.delete('ruta');
+    params.delete('aerolinea');
+    params.delete('region');
+    if (params.has('pagina')) params.set('pagina', '1');
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  };
+
+  // Mejora #1: los <select> nativos comparten el mismo fondo/borde que los
+  // botones, con la flecha del navegador ocultada (appearance-none) y una
+  // propia dibujada a mano -- así no rompen la consistencia visual con el
+  // resto de los controles según el sistema operativo/navegador del usuario.
+  const claseSelect =
+    'appearance-none bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md ' +
+    'pl-2.5 pr-7 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors cursor-pointer';
+
+  const Flecha = () => (
+    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">
+      ▾
+    </span>
+  );
+
   return (
     <div className="rounded-2xl border border-white/10 bg-[#10182B] p-3 space-y-3">
 
@@ -98,13 +152,13 @@ export default function BarraFiltros(props: Props) {
       <div className="flex flex-wrap items-center justify-center gap-3">
 
         {/* Moneda */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(false)}>
           <span className="text-[11px] font-medium text-slate-500">Moneda</span>
           <div className="inline-flex bg-[#0B1120] rounded-md p-1">
             <button
               onClick={() => actualizarFiltro('moneda', 'ARS')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                monedaAct === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
+                monedaAct === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               ARS ($)
@@ -112,7 +166,7 @@ export default function BarraFiltros(props: Props) {
             <button
               onClick={() => actualizarFiltro('moneda', 'USD')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                monedaAct === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
+                monedaAct === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               USD (US$)
@@ -121,13 +175,13 @@ export default function BarraFiltros(props: Props) {
         </div>
 
         {/* Tipo de Vuelo */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(false)}>
           <span className="text-[11px] font-medium text-slate-500">Tipo de Vuelo</span>
           <div className="inline-flex bg-[#0B1120] rounded-md p-1">
             <button
               onClick={() => actualizarFiltro('tipo_vuelo', 'TODOS')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                tipoVueloAct === 'TODOS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
+                tipoVueloAct === 'TODOS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               Todos
@@ -137,7 +191,7 @@ export default function BarraFiltros(props: Props) {
                 key={t}
                 onClick={() => actualizarFiltro('tipo_vuelo', t)}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                  tipoVueloAct === t ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white'
+                  tipoVueloAct === t ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
                 {etiquetar(t)}
@@ -147,21 +201,24 @@ export default function BarraFiltros(props: Props) {
         </div>
 
         {/* Filtro: Metabuscador */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(activo(fuenteAct))}>
           <label htmlFor="select-fuente" className="text-[11px] font-medium text-slate-500">Metabuscador</label>
-          <select
-            id="select-fuente"
-            value={fuenteAct}
-            onChange={(e) => actualizarFiltro('fuente', e.target.value)}
-            className="bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors"
-          >
-            <option value="TODAS">Todos los Metas</option>
-            {listaFuentes.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="select-fuente"
+              value={fuenteAct}
+              onChange={(e) => actualizarFiltro('fuente', e.target.value)}
+              className={claseSelect}
+            >
+              <option value="TODAS">Todos los Metas</option>
+              {listaFuentes.map((f) => (
+                <option key={f} value={f}>
+                  {conCantidad(f, f, props.conteoFuentes)}
+                </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
         </div>
       </div>
 
@@ -169,58 +226,77 @@ export default function BarraFiltros(props: Props) {
       <div className="flex flex-wrap items-center justify-center gap-3">
 
         {/* Filtro: Ruta */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(activo(rutaAct))}>
           <label htmlFor="select-ruta" className="text-[11px] font-medium text-slate-500">Ruta</label>
-          <select
-            id="select-ruta"
-            value={rutaAct}
-            onChange={(e) => actualizarFiltro('ruta', e.target.value)}
-            className="bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors"
-          >
-            <option value="TODAS">Todas las Rutas</option>
-            {listaRutas.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="select-ruta"
+              value={rutaAct}
+              onChange={(e) => actualizarFiltro('ruta', e.target.value)}
+              className={claseSelect}
+            >
+              <option value="TODAS">Todas las Rutas</option>
+              {listaRutas.map((r) => (
+                <option key={r} value={r}>
+                  {conCantidad(r, r, props.conteoRutas)}
+                </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
         </div>
 
         {/* Filtro: Region — antes llegaba como prop y no se usaba */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(activo(regionAct))}>
           <label htmlFor="select-region" className="text-[11px] font-medium text-slate-500">Región</label>
-          <select
-            id="select-region"
-            value={regionAct}
-            onChange={(e) => actualizarFiltro('region', e.target.value)}
-            className="bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors"
-          >
-            <option value="TODAS">Todas las Regiones</option>
-            {listaRegiones.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="select-region"
+              value={regionAct}
+              onChange={(e) => actualizarFiltro('region', e.target.value)}
+              className={claseSelect}
+            >
+              <option value="TODAS">Todas las Regiones</option>
+              {listaRegiones.map((r) => (
+                <option key={r} value={r}>
+                  {conCantidad(r, r, props.conteoRegiones)}
+                </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
         </div>
 
         {/* Filtro: Aerolinea */}
-        <div className="flex items-center gap-2 bg-[#050810] border border-white/10 rounded-lg px-3 py-2">
+        <div className={claseChip(activo(aeroAct))}>
           <label htmlFor="select-aero" className="text-[11px] font-medium text-slate-500">Aerolínea</label>
-          <select
-            id="select-aero"
-            value={aeroAct}
-            onChange={(e) => actualizarFiltro('aerolinea', e.target.value)}
-            className="bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md px-2.5 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors"
-          >
-            <option value="TODAS">Todas las Aerolíneas</option>
-            {listaAeros.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="select-aero"
+              value={aeroAct}
+              onChange={(e) => actualizarFiltro('aerolinea', e.target.value)}
+              className={claseSelect}
+            >
+              <option value="TODAS">Todas las Aerolíneas</option>
+              {listaAeros.map((a) => (
+                <option key={a} value={a}>
+                  {conCantidad(a, a, props.conteoAerolineas)}
+                </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
         </div>
+
+        {/* Mejora #4: solo aparece si hay algun filtro de recorte activo */}
+        {hayFiltrosActivos && (
+          <button
+            onClick={limpiarFiltros}
+            className="text-[11px] font-medium text-slate-500 hover:text-[#FF7A29] transition-colors underline decoration-dotted underline-offset-4"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {/* Feedback visual de transicion */}

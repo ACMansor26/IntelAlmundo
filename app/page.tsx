@@ -8,7 +8,9 @@ import {
   getAerolineasDisponibles,
   getRegionesDisponibles,
   getTiposVueloDisponibles,
-  getTablaItinerariosAlmundo
+  getTablaItinerariosAlmundo,
+  getConteosSegmento,
+  getConteosFiltros
 } from '@/lib/data';
 import BarraFiltros from '@/components/BarraFiltros';
 import Link from 'next/link';
@@ -60,14 +62,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const segmento = params.segmento || 'TODOS';
   const pagina = Math.max(1, parseInt(params.pagina || '1', 10));
 
-  const [kpis, rutas, fuentes, aerolineas, regiones, tiposVuelo, resultadoPaginado] = await Promise.all([
+  const [kpis, rutas, fuentes, aerolineas, regiones, tiposVuelo, resultadoPaginado, conteosSegmento, conteosFiltros] = await Promise.all([
     getResumenKPIs(moneda, ruta, fuente, aerolinea, tipo_vuelo, region),
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
     getRegionesDisponibles(moneda, tipo_vuelo),
     getTiposVueloDisponibles(moneda),
-    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, segmento, pagina, 50)
+    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, segmento, pagina, 50),
+    getConteosSegmento(moneda, ruta, fuente, aerolinea, tipo_vuelo, region),
+    getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region })
   ]);
 
   const {
@@ -192,11 +196,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     SIN_OFERTA: { rail: '#475569', dot: 'bg-slate-600', text: 'text-slate-500', label: 'Sin cobertura' }
   };
 
+  // Color por tab alineado al mismo codigo que ya usa el resto del dashboard
+  // (estadoColores mas arriba): Oportunidad=ambar, Despegar=celeste,
+  // Desalineado=rosa. "Todos" se queda con el naranja de marca.
   const tabsSegmento = [
-    { id: 'TODOS', label: 'Todos' },
-    { id: 'OPORTUNIDADES', label: '🎯 Oportunidades (≤3%)' },
-    { id: 'VS_DESPEGAR', label: '⚔️ Ganando a Despegar' },
-    { id: 'DESALINEADOS', label: '⚠️ Desalineados (>7%)' }
+    { id: 'TODOS', label: 'Todos', cantidad: conteosSegmento.total, colorActivo: 'bg-[#FF5A00] text-white' },
+    { id: 'OPORTUNIDADES', label: 'Oportunidades (≤3%)', cantidad: conteosSegmento.oportunidades, colorActivo: 'bg-amber-500 text-white' },
+    { id: 'VS_DESPEGAR', label: 'Ganando a Despegar', cantidad: conteosSegmento.vs_despegar, colorActivo: 'bg-sky-500 text-white' },
+    { id: 'DESALINEADOS', label: 'Desalineados (>7%)', cantidad: conteosSegmento.desalineados, colorActivo: 'bg-rose-500 text-white' }
   ];
 
   return (
@@ -235,6 +242,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             >
               Gráficos & KPIs
             </Link>
+            <Link
+              href="/historial"
+              className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition"
+            >
+              Historial de Búsquedas
+            </Link>
           </nav>
         </div>
 
@@ -251,6 +264,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           fuentes={fuentes}
           regiones={regiones}
           tiposVuelo={tiposVuelo}
+          conteoRutas={conteosFiltros.porRuta}
+          conteoRegiones={conteosFiltros.porRegion}
+          conteoAerolineas={conteosFiltros.porAerolinea}
+          conteoFuentes={conteosFiltros.porFuente}
         />
 
         {/* Ticker de KPIs — una sola franja con divisores finos, no 7 cards identicas */}
@@ -280,22 +297,27 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 border-b border-white/10 md:border-0">
+            {/* Tabs de segmento como pills segmentadas (mismo tratamiento que
+                el historial de búsquedas): color por significado + contador
+                por tab + hover con fondo, en vez del subrayado plano de antes. */}
+            <nav className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-[#050810] p-1">
               {tabsSegmento.map((tab) => (
                 <Link
                   key={tab.id}
                   href={buildPageUrl(1, tab.id)}
-                  className={`relative pb-2 text-xs font-medium transition ${
-                    segmento === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${
+                    segmento === tab.id
+                      ? tab.colorActivo
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                   }`}
                 >
-                  {tab.label}
-                  {segmento === tab.id && (
-                    <span className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-[#FF5A00]" />
-                  )}
+                  {tab.label}{' '}
+                  <span className={segmento === tab.id ? 'text-white/70' : 'text-slate-600'}>
+                    · {tab.cantidad}
+                  </span>
                 </Link>
               ))}
-            </div>
+            </nav>
           </div>
 
           <div className="overflow-x-auto">

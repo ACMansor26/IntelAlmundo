@@ -156,6 +156,45 @@ export interface DatosCorrelacionPosicion {
   posicion_cuando_no_mejor_precio: number | null;
 }
 
+export interface CorridaScraper {
+  id: number;
+  fuente: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  duracion_scraping_seg: number | null;
+  duracion_db_seg: number | null;
+  duracion_total_seg: number | null;
+  jobs_totales: number;
+  jobs_con_datos: number;
+  jobs_con_almundo: number;
+  jobs_con_despegar: number;
+  ofertas_totales: number;
+  ofertas_ars: number;
+  ofertas_usd: number;
+  filas_insertadas_db: number;
+  watchdog_kills_fase1: number;
+  watchdog_reencolados_fase1: number;
+  watchdog_descartados_fase1: number;
+  jobs_segunda_pasada: number;
+  jobs_recuperados_segunda_pasada: number;
+  watchdog_kills_fase2: number;
+  csv_path: string | null;
+}
+
+export interface CorridaJobDetalle {
+  idx: number;
+  ruta: string;
+  moneda: string;
+  tipo_vuelo: string | null;
+  dias_anticipacion: number;
+  dias_estadia: number;
+  ofertas_count: number;
+  tiene_almundo: boolean;
+  tiene_despegar: boolean;
+  reviso_segunda_pasada: boolean;
+  recupero_almundo_segunda_pasada: boolean;
+}
+
 // ==============================================================================
 // 3. HELPER DE FILTROS SQL
 // ==============================================================================
@@ -544,6 +583,150 @@ export async function getTablaItinerariosAlmundo(
       paginaActual: pagina,
       tamanoPagina: limit
     };
+  } finally {
+    client.release();
+  }
+}
+
+// ==============================================================================
+// 5b. CONTEOS POR SEGMENTO (para los tabs de la matriz -- mismo criterio que
+// el filtro de segmento en getTablaItinerariosAlmundo, pero sin paginar; se
+// consulta una vez por carga de pagina para mostrar "N vuelos" en cada tab).
+// ==============================================================================
+export interface ConteosSegmento {
+  total: number;
+  oportunidades: number;
+  vs_despegar: number;
+  desalineados: number;
+}
+
+export async function getConteosSegmento(
+  monedaOrFiltros: string | FiltrosDashboard = 'ARS',
+  ruta: string = 'TODAS',
+  fuente: string = 'TODAS',
+  aerolinea: string = 'TODAS',
+  tipo_vuelo: string = 'TODOS',
+  region: string = 'TODAS'
+): Promise<ConteosSegmento> {
+  const { whereSql, params } = normalizarFiltros(monedaOrFiltros, ruta, fuente, aerolinea, tipo_vuelo, region);
+  const client = await pool.connect();
+
+  try {
+    // Misma logica de estado_almundo/spread_despegar que getTablaItinerariosAlmundo,
+    // pero solo agregada a conteos (sin traer filas ni paginar).
+    const q = await client.query(
+      `
+      WITH base_vuelos AS (
+        SELECT id_pareja_vuelo, fuente, MIN(precio) AS mejor_precio_mercado
+        FROM precios_vuelos
+        WHERE ${whereSql}
+        GROUP BY id_pareja_vuelo, fuente
+      ),
+      almundo_best AS (
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio AS precio_almundo
+        FROM precios_vuelos
+        WHERE ${whereSql} AND vendedor = 'Almundo'
+        ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
+      ),
+      despegar_best AS (
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio AS precio_despegar
+        FROM precios_vuelos
+        WHERE ${whereSql} AND vendedor = 'Despegar'
+        ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
+      ),
+      metricas AS (
+        SELECT
+          b.id_pareja_vuelo,
+          CASE
+            WHEN a.precio_almundo IS NULL THEN 'SIN_OFERTA'
+            WHEN b.mejor_precio_mercado <= 0 THEN 'SIN_OFERTA'
+            WHEN (a.precio_almundo - b.mejor_precio_mercado) = 0 THEN 'WIN'
+            WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.03 THEN 'OPORTUNIDAD'
+            WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.07 THEN 'MODERADO'
+            ELSE 'DESALINEADO'
+          END AS estado_almundo,
+          CASE
+            WHEN a.precio_almundo IS NOT NULL AND d.precio_despegar IS NOT NULL
+              THEN (a.precio_almundo - d.precio_despegar)
+            ELSE NULL
+          END AS spread_despegar_monto
+        FROM base_vuelos b
+        LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
+        LEFT JOIN despegar_best d ON b.id_pareja_vuelo = d.id_pareja_vuelo AND b.fuente = d.fuente
+      )
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE estado_almundo = 'OPORTUNIDAD') AS oportunidades,
+        COUNT(*) FILTER (WHERE spread_despegar_monto < 0) AS vs_despegar,
+        COUNT(*) FILTER (WHERE estado_almundo = 'DESALINEADO') AS desalineados
+      FROM metricas;
+      `,
+      params
+    );
+
+    const r = q.rows[0] || {};
+    return {
+      total: Number(r.total || 0),
+      oportunidades: Number(r.oportunidades || 0),
+      vs_despegar: Number(r.vs_despegar || 0),
+      desalineados: Number(r.desalineados || 0)
+    };
+  } catch (err) {
+    console.error('Error en getConteosSegmento:', err);
+    return { total: 0, oportunidades: 0, vs_despegar: 0, desalineados: 0 };
+  } finally {
+    client.release();
+  }
+}
+
+// ==============================================================================
+// 5c. CONTEOS POR OPCION DE FILTRO (para mostrar "AEP-COR (18)" en los
+// selects de BarraFiltros). Cada dimension se cuenta EXCLUYENDO su propio
+// filtro actual (pero respetando los demas) -- patron de busqueda facetada
+// estandar: si ya elegiste una ruta, el conteo de "Aerolinea" sigue
+// reflejando esa ruta, pero el conteo de "Ruta" no se auto-filtra por si
+// mismo (si no, la ruta elegida mostraria un numero artificialmente parcial).
+// ==============================================================================
+export interface ConteosFiltros {
+  porRuta: Record<string, number>;
+  porRegion: Record<string, number>;
+  porAerolinea: Record<string, number>;
+  porFuente: Record<string, number>;
+}
+
+export async function getConteosFiltros(filtros: FiltrosDashboard): Promise<ConteosFiltros> {
+  const client = await pool.connect();
+
+  async function conteoPorCampo(
+    campo: 'ruta' | 'region' | 'aerolinea' | 'fuente',
+    excluirCampo: 'ruta' | 'region' | 'aerolinea' | 'fuente'
+  ): Promise<Record<string, number>> {
+    const filtrosSinCampo: FiltrosDashboard = { ...filtros, [excluirCampo]: undefined };
+    const { whereSql, params } = normalizarFiltros(filtrosSinCampo);
+    try {
+      const q = await client.query(
+        `SELECT ${campo}, COUNT(DISTINCT id_pareja_vuelo) AS cantidad
+         FROM precios_vuelos WHERE ${whereSql} GROUP BY ${campo};`,
+        params
+      );
+      const mapa: Record<string, number> = {};
+      for (const row of q.rows) mapa[row[campo]] = Number(row.cantidad);
+      return mapa;
+    } catch (err) {
+      console.error(`Error en getConteosFiltros (${campo}):`, err);
+      return {};
+    }
+  }
+
+  try {
+    // Secuencial (no Promise.all) -- un mismo client de pg procesa una
+    // consulta a la vez; encolarlas en paralelo sobre el mismo client no
+    // suma velocidad y complica el manejo de errores por consulta.
+    const porRuta = await conteoPorCampo('ruta', 'ruta');
+    const porRegion = await conteoPorCampo('region', 'region');
+    const porAerolinea = await conteoPorCampo('aerolinea', 'aerolinea');
+    const porFuente = await conteoPorCampo('fuente', 'fuente');
+    return { porRuta, porRegion, porAerolinea, porFuente };
   } finally {
     client.release();
   }
@@ -996,5 +1179,96 @@ export async function getTiposVueloDisponibles(moneda?: string): Promise<string[
     return res.rows.length > 0 ? res.rows.map(r => r.tipo_vuelo) : TIPOS_VUELO_FALLBACK;
   } catch {
     return TIPOS_VUELO_FALLBACK;
+  }
+}
+
+// ==============================================================================
+// 8. HISTORIAL DE CORRIDAS DEL SCRAPER (tablas scraper_runs / scraper_run_jobs,
+// creadas por guardar_log_corrida() en tcprueba.py). Si las tablas todavia no
+// existen (ninguna corrida con el nuevo logging fue ejecutada aun) las queries
+// devuelven [] en vez de romper la pagina.
+// ==============================================================================
+export async function getHistorialCorridas(limite: number = 20): Promise<CorridaScraper[]> {
+  try {
+    const res = await pool.query(
+      `
+      SELECT
+        id, fuente,
+        TO_CHAR(fecha_inicio, 'YYYY-MM-DD HH24:MI') AS fecha_inicio,
+        TO_CHAR(fecha_fin, 'YYYY-MM-DD HH24:MI') AS fecha_fin,
+        duracion_scraping_seg, duracion_db_seg, duracion_total_seg,
+        jobs_totales, jobs_con_datos, jobs_con_almundo, jobs_con_despegar,
+        ofertas_totales, ofertas_ars, ofertas_usd, filas_insertadas_db,
+        watchdog_kills_fase1, watchdog_reencolados_fase1, watchdog_descartados_fase1,
+        jobs_segunda_pasada, jobs_recuperados_segunda_pasada, watchdog_kills_fase2,
+        csv_path
+      FROM scraper_runs
+      ORDER BY fecha_inicio DESC
+      LIMIT $1;
+      `,
+      [limite]
+    );
+
+    return res.rows.map(r => ({
+      id: Number(r.id),
+      fuente: r.fuente,
+      fecha_inicio: r.fecha_inicio,
+      fecha_fin: r.fecha_fin,
+      duracion_scraping_seg: r.duracion_scraping_seg !== null ? Number(r.duracion_scraping_seg) : null,
+      duracion_db_seg: r.duracion_db_seg !== null ? Number(r.duracion_db_seg) : null,
+      duracion_total_seg: r.duracion_total_seg !== null ? Number(r.duracion_total_seg) : null,
+      jobs_totales: Number(r.jobs_totales || 0),
+      jobs_con_datos: Number(r.jobs_con_datos || 0),
+      jobs_con_almundo: Number(r.jobs_con_almundo || 0),
+      jobs_con_despegar: Number(r.jobs_con_despegar || 0),
+      ofertas_totales: Number(r.ofertas_totales || 0),
+      ofertas_ars: Number(r.ofertas_ars || 0),
+      ofertas_usd: Number(r.ofertas_usd || 0),
+      filas_insertadas_db: Number(r.filas_insertadas_db || 0),
+      watchdog_kills_fase1: Number(r.watchdog_kills_fase1 || 0),
+      watchdog_reencolados_fase1: Number(r.watchdog_reencolados_fase1 || 0),
+      watchdog_descartados_fase1: Number(r.watchdog_descartados_fase1 || 0),
+      jobs_segunda_pasada: Number(r.jobs_segunda_pasada || 0),
+      jobs_recuperados_segunda_pasada: Number(r.jobs_recuperados_segunda_pasada || 0),
+      watchdog_kills_fase2: Number(r.watchdog_kills_fase2 || 0),
+      csv_path: r.csv_path || null
+    }));
+  } catch (err) {
+    console.error('Error en getHistorialCorridas (¿la tabla scraper_runs todavía no existe?):', err);
+    return [];
+  }
+}
+
+export async function getDetalleCorrida(runId: number): Promise<CorridaJobDetalle[]> {
+  try {
+    const res = await pool.query(
+      `
+      SELECT
+        idx, ruta, moneda, tipo_vuelo, dias_anticipacion, dias_estadia,
+        ofertas_count, tiene_almundo, tiene_despegar,
+        reviso_segunda_pasada, recupero_almundo_segunda_pasada
+      FROM scraper_run_jobs
+      WHERE run_id = $1
+      ORDER BY idx ASC;
+      `,
+      [runId]
+    );
+
+    return res.rows.map(r => ({
+      idx: Number(r.idx),
+      ruta: r.ruta,
+      moneda: r.moneda,
+      tipo_vuelo: r.tipo_vuelo || null,
+      dias_anticipacion: Number(r.dias_anticipacion),
+      dias_estadia: Number(r.dias_estadia),
+      ofertas_count: Number(r.ofertas_count || 0),
+      tiene_almundo: Boolean(r.tiene_almundo),
+      tiene_despegar: Boolean(r.tiene_despegar),
+      reviso_segunda_pasada: Boolean(r.reviso_segunda_pasada),
+      recupero_almundo_segunda_pasada: Boolean(r.recupero_almundo_segunda_pasada)
+    }));
+  } catch (err) {
+    console.error('Error en getDetalleCorrida:', err);
+    return [];
   }
 }

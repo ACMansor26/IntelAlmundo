@@ -8,7 +8,8 @@ import {
   getFuentesDisponibles,
   getAerolineasDisponibles,
   getRegionesDisponibles,
-  getTiposVueloDisponibles
+  getTiposVueloDisponibles,
+  getConteosFiltros
 } from '@/lib/data';
 import GraficosDashboard from '@/components/GraficosDashboard';
 import BarraFiltros from '@/components/BarraFiltros';
@@ -55,12 +56,13 @@ export default async function GraficosPage(props: PageProps) {
 
   // Fix: esta pagina no traia las listas dinamicas de filtros — BarraFiltros
   // caia siempre al fallback hardcodeado en vez de los valores reales de la DB.
-  const [rutas, fuentes, aerolineas, regiones, tiposVuelo] = await Promise.all([
+  const [rutas, fuentes, aerolineas, regiones, tiposVuelo, conteosFiltros] = await Promise.all([
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
     getRegionesDisponibles(moneda, tipo_vuelo),
-    getTiposVueloDisponibles(moneda)
+    getTiposVueloDisponibles(moneda),
+    getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region })
   ]);
 
   let datos = null;
@@ -92,7 +94,11 @@ export default async function GraficosPage(props: PageProps) {
     fuentes,
     aerolineas,
     regiones,
-    tiposVuelo
+    tiposVuelo,
+    conteoRutas: conteosFiltros.porRuta,
+    conteoRegiones: conteosFiltros.porRegion,
+    conteoAerolineas: conteosFiltros.porAerolinea,
+    conteoFuentes: conteosFiltros.porFuente
   };
 
   // Header unico, calculado antes del branch de error para no duplicar el JSX
@@ -126,6 +132,12 @@ export default async function GraficosPage(props: PageProps) {
           Gráficos & KPIs
           <span className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-[#FF5A00]" />
         </span>
+        <Link
+          href="/historial"
+          className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition"
+        >
+          Historial de Búsquedas
+        </Link>
       </nav>
     </header>
   );
