@@ -9,7 +9,8 @@ import {
   getAerolineasDisponibles,
   getRegionesDisponibles,
   getTiposVueloDisponibles,
-  getConteosFiltros
+  getConteosFiltros,
+  getCompetidoresDisponibles
 } from '@/lib/data';
 import GraficosDashboard from '@/components/GraficosDashboard';
 import BarraFiltros from '@/components/BarraFiltros';
@@ -53,15 +54,17 @@ export default async function GraficosPage(props: PageProps) {
   // Fix: el filtro de tipo de vuelo no se leia de la URL ni se pasaba a
   // obtenerDatosDashboard, aunque FiltrosDashboard ya lo soporta.
   const tipo_vuelo = (resolvedSearchParams?.tipo_vuelo as string) || 'TODOS';
+  const competidor = (resolvedSearchParams?.competidor as string) || 'Despegar';
 
   // Fix: esta pagina no traia las listas dinamicas de filtros — BarraFiltros
   // caia siempre al fallback hardcodeado en vez de los valores reales de la DB.
-  const [rutas, fuentes, aerolineas, regiones, tiposVuelo, conteosFiltros] = await Promise.all([
+  const [rutas, fuentes, aerolineas, regiones, tiposVuelo, competidores, conteosFiltros] = await Promise.all([
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
     getRegionesDisponibles(moneda, tipo_vuelo),
     getTiposVueloDisponibles(moneda),
+    getCompetidoresDisponibles(moneda),
     getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region })
   ]);
 
@@ -69,7 +72,7 @@ export default async function GraficosPage(props: PageProps) {
   let errorMsg: string | null = null;
 
   try {
-    datos = await obtenerDatosDashboard({ moneda, ruta, aerolinea, fuente, region, tipo_vuelo });
+    datos = await obtenerDatosDashboard({ moneda, ruta, aerolinea, fuente, region, tipo_vuelo, competidor });
   } catch (err: any) {
     console.error('Error al consultar Neon PostgreSQL:', err);
     errorMsg = 'No se pudo conectar a la base de datos de Neon o aún no hay registros disponibles.';
@@ -79,7 +82,7 @@ export default async function GraficosPage(props: PageProps) {
   // igual que el bug ya corregido en app/page.tsx — se rompe con espacios o
   // caracteres especiales en fuente/aerolinea, y no llevaba tipo_vuelo.
   const buildMatrizUrl = () => {
-    const p = new URLSearchParams({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region });
+    const p = new URLSearchParams({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region, competidor });
     return `/?${p.toString()}`;
   };
 
@@ -90,11 +93,13 @@ export default async function GraficosPage(props: PageProps) {
     fuente,
     region,
     tipoVuelo: tipo_vuelo,
+    competidor,
     rutas,
     fuentes,
     aerolineas,
     regiones,
     tiposVuelo,
+    competidores,
     conteoRutas: conteosFiltros.porRuta,
     conteoRegiones: conteosFiltros.porRegion,
     conteoAerolineas: conteosFiltros.porAerolinea,
@@ -170,9 +175,17 @@ export default async function GraficosPage(props: PageProps) {
       )
     : 0;
 
-  const avgSovDespegar = totalVuelosSov > 0
+  // Fix: "Presencia Despegar" quedaba fijo aunque el usuario cambiara el
+  // competidor a comparar en la barra de filtros -- ahora toma la columna de
+  // qSOV (datosShareGanadoresRuta) que corresponde al competidor elegido.
+  const campoPctCompetidor =
+    competidor === 'TurismoCity' ? 'turismocity_pct' :
+    competidor === 'Atrápalo' ? 'atrapalo_pct' :
+    'despegar_pct';
+
+  const avgSovCompetidor = totalVuelosSov > 0
     ? Math.round(
-        datos.datosShareGanadoresRuta.reduce((acc, curr) => acc + curr.despegar_pct * curr.total_vuelos, 0) / totalVuelosSov
+        datos.datosShareGanadoresRuta.reduce((acc, curr) => acc + curr[campoPctCompetidor] * curr.total_vuelos, 0) / totalVuelosSov
       )
     : 0;
 
@@ -198,8 +211,8 @@ export default async function GraficosPage(props: PageProps) {
       color: 'text-[#FF7A29]'
     },
     {
-      label: 'Presencia Despegar',
-      value: `${avgSovDespegar}%`,
+      label: `Presencia ${competidor}`,
+      value: `${avgSovCompetidor}%`,
       sub: 'share de góndola, ponderado por volumen',
       color: 'text-sky-400'
     }
@@ -228,18 +241,21 @@ export default async function GraficosPage(props: PageProps) {
       {/* Grilla 3x3 de Gráficos Analíticos */}
       <GraficosDashboard
         moneda={moneda}
+        competidor={competidor}
         rutaSeleccionada={ruta}
         aerolineaSeleccionada={aerolinea}
         datosDistribucionGap={datos.datosDistribucionGap}
         datosRegionCompetitividad={datos.datosRegionCompetitividad}
         datosHeadToHeadRelativo={datos.datosHeadToHeadRelativo}
         datosAP={datos.datosAP}
+        datosVolumenAP={datos.datosVolumenAP}
         datosEstadia={datos.datosEstadia}
         datosDiaSemana={datos.datosDiaSemana}
         datosShareGanadoresRuta={datos.datosShareGanadoresRuta}
         datosMarkup={datos.datosMarkup}
         datosRanking={datos.datosRanking}
-        datosEvolucionTemporal={datos.datosEvolucionTemporal}
+        datosDistribucionPosicion={datos.datosDistribucionPosicion}
+        datosFranjaHoraria={datos.datosFranjaHoraria}
         datosGapMoneda={datos.datosGapMoneda}
         datosCorrelacionPosicion={datos.datosCorrelacionPosicion}
       />

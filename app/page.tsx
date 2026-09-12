@@ -10,7 +10,8 @@ import {
   getTiposVueloDisponibles,
   getTablaItinerariosAlmundo,
   getConteosSegmento,
-  getConteosFiltros
+  getConteosFiltros,
+  getCompetidoresDisponibles
 } from '@/lib/data';
 import BarraFiltros from '@/components/BarraFiltros';
 import Link from 'next/link';
@@ -48,6 +49,7 @@ interface PageProps {
     region?: string;
     segmento?: string;
     pagina?: string;
+    competidor?: string;
   }>;
 }
 
@@ -61,16 +63,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const region = params.region || 'TODAS';
   const segmento = params.segmento || 'TODOS';
   const pagina = Math.max(1, parseInt(params.pagina || '1', 10));
+  const competidor = params.competidor || 'Despegar';
 
-  const [kpis, rutas, fuentes, aerolineas, regiones, tiposVuelo, resultadoPaginado, conteosSegmento, conteosFiltros] = await Promise.all([
+  const [kpis, rutas, fuentes, aerolineas, regiones, tiposVuelo, competidores, resultadoPaginado, conteosSegmento, conteosFiltros] = await Promise.all([
     getResumenKPIs(moneda, ruta, fuente, aerolinea, tipo_vuelo, region),
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
     getRegionesDisponibles(moneda, tipo_vuelo),
     getTiposVueloDisponibles(moneda),
-    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, segmento, pagina, 50),
-    getConteosSegmento(moneda, ruta, fuente, aerolinea, tipo_vuelo, region),
+    getCompetidoresDisponibles(moneda),
+    getTablaItinerariosAlmundo(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, segmento, pagina, 50, competidor),
+    getConteosSegmento(moneda, ruta, fuente, aerolinea, tipo_vuelo, region, competidor),
     getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region })
   ]);
 
@@ -106,6 +110,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     return `${signo}${val.toFixed(1)}%`;
   };
 
+  // dd/mm en vez de "YYYY-MM-DD" crudo o el viejo slice(5) que daba "MM-DD".
+  const formatoFechaCorta = (f: string | null | undefined) => {
+    if (!f) return '-';
+    const [, mes, dia] = f.split('-');
+    return `${dia}/${mes}`;
+  };
+
+  // "HH:MM" recortado a 5 chars por si Postgres devuelve "HH:MM:SS".
+  const formatoHora = (h: string | null | undefined) => {
+    if (!h) return null;
+    return h.slice(0, 5);
+  };
+
   // Fix: URLSearchParams en vez de template string manual — evita romper la URL
   // cuando fuente/aerolinea/ruta traen espacios, & u otros caracteres especiales.
   const buildPageUrl = (targetPage: number, targetSegment?: string) => {
@@ -118,7 +135,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       tipo_vuelo,
       region,
       segmento: seg,
-      pagina: String(targetPage)
+      pagina: String(targetPage),
+      competidor
     });
     return `/?${p.toString()}`;
   };
@@ -202,7 +220,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const tabsSegmento = [
     { id: 'TODOS', label: 'Todos', cantidad: conteosSegmento.total, colorActivo: 'bg-[#FF5A00] text-white' },
     { id: 'OPORTUNIDADES', label: 'Oportunidades (≤3%)', cantidad: conteosSegmento.oportunidades, colorActivo: 'bg-amber-500 text-white' },
-    { id: 'VS_DESPEGAR', label: 'Ganando a Despegar', cantidad: conteosSegmento.vs_despegar, colorActivo: 'bg-sky-500 text-white' },
+    { id: 'VS_DESPEGAR', label: `Ganando a ${competidor}`, cantidad: conteosSegmento.vs_competidor, colorActivo: 'bg-sky-500 text-white' },
     { id: 'DESALINEADOS', label: 'Desalineados (>7%)', cantidad: conteosSegmento.desalineados, colorActivo: 'bg-rose-500 text-white' }
   ];
 
@@ -264,6 +282,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           fuentes={fuentes}
           regiones={regiones}
           tiposVuelo={tiposVuelo}
+          competidor={competidor}
+          competidores={competidores}
           conteoRutas={conteosFiltros.porRuta}
           conteoRegiones={conteosFiltros.porRegion}
           conteoAerolineas={conteosFiltros.porAerolinea}
@@ -330,7 +350,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <th className="py-3 px-3 text-right">Precio Almundo</th>
                   <th className="py-3 px-3 text-right">Líder Mercado</th>
                   <th className="py-3 px-3 text-right">Gap vs Líder</th>
-                  <th className="py-3 px-3 text-right">vs Despegar</th>
+                  <th className="py-3 px-3 text-right">vs {competidor}</th>
                   <th className="py-3 px-3 text-center">Estado Almundo</th>
                 </tr>
               </thead>
@@ -376,16 +396,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </div>
                         </td>
 
-                        {/* 2. Fechas Ida y Vuelta */}
+                        {/* 2. Fechas Ida y Vuelta — dd/mm + hora de salida de cada tramo,
+                            para identificar sin ambigüedad cada par de vuelos: un mismo
+                            día puede tener varias salidas a distinta hora. */}
                         <td className="py-3 px-3 whitespace-nowrap">
                           <div className="text-white font-medium flex items-center gap-1">
-                            <span>{item.fecha_ida ? item.fecha_ida.slice(5) : '-'}</span>
+                            <span>{formatoFechaCorta(item.fecha_ida)}</span>
                             <span className="text-slate-600">➔</span>
-                            <span>{item.fecha_vuelta ? item.fecha_vuelta.slice(5) : '-'}</span>
+                            <span>{formatoFechaCorta(item.fecha_vuelta)}</span>
                           </div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            {item.dia_semana_ida} salida
-                          </div>
+                          {(formatoHora(item.hora_salida_ida) || formatoHora(item.hora_salida_vuelta)) && (
+                            <div className={`${dato} text-[11px] text-slate-400 mt-0.5`}>
+                              {formatoHora(item.hora_salida_ida) ?? '--:--'}
+                              <span className="text-slate-600"> ➔ </span>
+                              {formatoHora(item.hora_salida_vuelta) ?? '--:--'}
+                            </div>
+                          )}
                         </td>
 
                         {/* 3. Anticipación y Estadía */}
@@ -437,17 +463,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           )}
                         </td>
 
-                        {/* 7. Spread vs Despegar */}
+                        {/* 7. Spread vs Competidor elegido */}
                         <td className={`${dato} py-3 px-3 text-right whitespace-nowrap`}>
-                          {item.spread_despegar_monto !== null ? (
+                          {item.spread_competidor_monto !== null ? (
                             <div>
                               <div className={`font-semibold ${
-                                item.spread_despegar_monto < 0 ? 'text-emerald-400' : item.spread_despegar_monto === 0 ? 'text-slate-400' : 'text-rose-400'
+                                item.spread_competidor_monto < 0 ? 'text-emerald-400' : item.spread_competidor_monto === 0 ? 'text-slate-400' : 'text-rose-400'
                               }`}>
-                                {formatoGapPct(item.spread_despegar_pct)}
+                                {formatoGapPct(item.spread_competidor_pct)}
                               </div>
                               <div className="text-[10px] text-slate-500">
-                                {formatoGapMonto(item.spread_despegar_monto)}
+                                {formatoGapMonto(item.spread_competidor_monto)}
                               </div>
                             </div>
                           ) : (

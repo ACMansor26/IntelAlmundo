@@ -27,6 +27,11 @@ export interface FiltrosDashboard {
   region?: string;
   tipo_vuelo?: string;
   segmento?: string;
+  // Competidor elegido para las comparaciones 1-a-1 (matriz, H2H, curvas
+  // temporales, distribucion de posicion). Default 'Despegar' -- los graficos
+  // de panorama completo (cobertura, markup, ranking, correlacion) siguen
+  // mostrando TODOS los competidores sin importar este filtro.
+  competidor?: string;
 }
 
 export interface ResumenKPIs {
@@ -62,8 +67,8 @@ export interface ItinerarioAlmundo {
   vendedor_ganador: string;
   gap_min_pct: number | null;
   gap_min_monto: number | null;
-  spread_despegar_pct: number | null;
-  spread_despegar_monto: number | null;
+  spread_competidor_pct: number | null;
+  spread_competidor_monto: number | null;
   estado_almundo: 'WIN' | 'OPORTUNIDAD' | 'MODERADO' | 'DESALINEADO' | 'SIN_OFERTA';
 }
 
@@ -98,21 +103,27 @@ export interface DatosHeadToHeadRelativo {
 export interface DatosGraficoAP {
   dias_anticipacion: number;
   almundo: number | null;
-  despegar: number | null;
+  competidor: number | null;
   canal_directo: number | null;
+}
+
+export interface DatosVolumenAP {
+  rango_ap: string;
+  total_vuelos: number;
+  gap_almundo: number | null;
 }
 
 export interface DatosEstadia {
   rango_estadia: string;
   almundo: number | null;
-  despegar: number | null;
+  competidor: number | null;
   canal_directo: number | null;
 }
 
 export interface DatosDiaSemana {
   dia_semana_vuelo: string;
   almundo: number | null;
-  despegar: number | null;
+  competidor: number | null;
   canal_directo: number | null;
 }
 
@@ -121,6 +132,7 @@ export interface DatosShareGanadoresRuta {
   almundo_pct: number;
   despegar_pct: number;
   turismocity_pct: number;
+  atrapalo_pct: number;
   total_vuelos: number;
 }
 
@@ -137,10 +149,11 @@ export interface DatosRanking {
   ranking_promedio: number;
 }
 
-export interface DatosEvolucionTemporal {
-  fecha: string;
+export interface DatosFranjaHoraria {
+  franja_horaria: string;
+  rango_horas: string;
   almundo: number | null;
-  despegar: number | null;
+  competidor: number | null;
   canal_directo: number | null;
 }
 
@@ -148,6 +161,12 @@ export interface DatosGapMonedaRuta {
   ruta: string;
   gap_ars: number | null;
   gap_usd: number | null;
+}
+
+export interface DatosDistribucionPosicion {
+  rango_posicion: string;
+  almundo_pct: number | null;
+  competidor_pct: number | null;
 }
 
 export interface DatosCorrelacionPosicion {
@@ -402,9 +421,16 @@ export async function getTablaItinerariosAlmundo(
   region: string = 'TODAS',
   segmento: string = 'TODOS',
   pagina: number = 1,
-  tamanoPagina: number = 50
+  tamanoPagina: number = 50,
+  competidor: string = 'Despegar'
 ): Promise<ResultadoPaginadoItinerarios> {
   const { whereSql, params, filtros } = normalizarFiltros(monedaOrFiltros, ruta, fuente, aerolinea, tipo_vuelo, region);
+
+  // Competidor elegido para "vs {competidor}": viaja como parametro bindeado
+  // ($N) en vez de interpolado, igual que el resto de los valores dinamicos.
+  const competidorFinal = filtros.competidor || competidor;
+  params.push(competidorFinal);
+  const competidorIdx = params.length;
 
   // Fix #1: allowlist + parametro real en vez de interpolar el string en el SQL.
   const seg = normalizarSegmento(filtros.segmento || segmento);
@@ -465,13 +491,13 @@ export async function getTablaItinerariosAlmundo(
         WHERE ${whereSql} AND vendedor = 'Almundo'
         ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
       ),
-      despegar_best AS (
+      competidor_best AS (
         SELECT DISTINCT ON (id_pareja_vuelo, fuente)
           id_pareja_vuelo,
           fuente,
-          precio AS precio_despegar
+          precio AS precio_competidor
         FROM precios_vuelos
-        WHERE ${whereSql} AND vendedor = 'Despegar'
+        WHERE ${whereSql} AND vendedor = $${competidorIdx}::text
         ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
       ),
       ganadores AS (
@@ -484,32 +510,32 @@ export async function getTablaItinerariosAlmundo(
         ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
       ),
       metricas AS (
-        SELECT 
+        SELECT
           b.*,
           a.precio_almundo,
           a.posicion_almundo,
-          dsp.precio_despegar,
+          comp.precio_competidor,
           COALESCE(g.vendedor_ganador, 'Desconocido') AS vendedor_ganador,
-          CASE 
+          CASE
             WHEN a.precio_almundo IS NOT NULL THEN (a.precio_almundo - b.mejor_precio_mercado)
-            ELSE NULL 
+            ELSE NULL
           END AS gap_min_monto,
-          CASE 
-            WHEN a.precio_almundo IS NOT NULL AND b.mejor_precio_mercado > 0 
+          CASE
+            WHEN a.precio_almundo IS NOT NULL AND b.mejor_precio_mercado > 0
               THEN ROUND(((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) * 100, 1)
-            ELSE NULL 
+            ELSE NULL
           END AS gap_min_pct,
-          CASE 
-            WHEN a.precio_almundo IS NOT NULL AND dsp.precio_despegar IS NOT NULL 
-              THEN (a.precio_almundo - dsp.precio_despegar)
-            ELSE NULL 
-          END AS spread_despegar_monto,
-          CASE 
-            WHEN a.precio_almundo IS NOT NULL AND dsp.precio_despegar IS NOT NULL AND dsp.precio_despegar > 0 
-              THEN ROUND(((a.precio_almundo - dsp.precio_despegar) / dsp.precio_despegar) * 100, 1)
-            ELSE NULL 
-          END AS spread_despegar_pct,
-          CASE 
+          CASE
+            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
+              THEN (a.precio_almundo - comp.precio_competidor)
+            ELSE NULL
+          END AS spread_competidor_monto,
+          CASE
+            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL AND comp.precio_competidor > 0
+              THEN ROUND(((a.precio_almundo - comp.precio_competidor) / comp.precio_competidor) * 100, 1)
+            ELSE NULL
+          END AS spread_competidor_pct,
+          CASE
             WHEN a.precio_almundo IS NULL THEN 'SIN_OFERTA'
             WHEN b.mejor_precio_mercado <= 0 THEN 'SIN_OFERTA'
             WHEN (a.precio_almundo - b.mejor_precio_mercado) = 0 THEN 'WIN'
@@ -519,18 +545,18 @@ export async function getTablaItinerariosAlmundo(
           END AS estado_almundo
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
-        LEFT JOIN despegar_best dsp ON b.id_pareja_vuelo = dsp.id_pareja_vuelo AND b.fuente = dsp.fuente
+        LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
         LEFT JOIN ganadores g ON b.id_pareja_vuelo = g.id_pareja_vuelo AND b.fuente = g.fuente
       ),
       filtrados AS (
         SELECT *, COUNT(*) OVER() AS total_count
         FROM metricas
-        WHERE 
-          CASE 
+        WHERE
+          CASE
             WHEN $${segParamIdx}::text = 'OPORTUNIDADES' THEN estado_almundo = 'OPORTUNIDAD'
-            WHEN $${segParamIdx}::text = 'VS_DESPEGAR' THEN spread_despegar_monto < 0
+            WHEN $${segParamIdx}::text = 'VS_DESPEGAR' THEN spread_competidor_monto < 0
             WHEN $${segParamIdx}::text = 'DESALINEADOS' THEN estado_almundo = 'DESALINEADO'
-            ELSE TRUE 
+            ELSE TRUE
           END
       )
       SELECT * FROM filtrados
@@ -562,8 +588,8 @@ export async function getTablaItinerariosAlmundo(
       vendedor_ganador: r.vendedor_ganador,
       gap_min_pct: r.gap_min_pct !== null ? Number(r.gap_min_pct) : null,
       gap_min_monto: r.gap_min_monto !== null ? Number(r.gap_min_monto) : null,
-      spread_despegar_pct: r.spread_despegar_pct !== null ? Number(r.spread_despegar_pct) : null,
-      spread_despegar_monto: r.spread_despegar_monto !== null ? Number(r.spread_despegar_monto) : null,
+      spread_competidor_pct: r.spread_competidor_pct !== null ? Number(r.spread_competidor_pct) : null,
+      spread_competidor_monto: r.spread_competidor_monto !== null ? Number(r.spread_competidor_monto) : null,
       estado_almundo: r.estado_almundo as ItinerarioAlmundo['estado_almundo']
     }));
 
@@ -596,7 +622,7 @@ export async function getTablaItinerariosAlmundo(
 export interface ConteosSegmento {
   total: number;
   oportunidades: number;
-  vs_despegar: number;
+  vs_competidor: number;
   desalineados: number;
 }
 
@@ -606,13 +632,17 @@ export async function getConteosSegmento(
   fuente: string = 'TODAS',
   aerolinea: string = 'TODAS',
   tipo_vuelo: string = 'TODOS',
-  region: string = 'TODAS'
+  region: string = 'TODAS',
+  competidor: string = 'Despegar'
 ): Promise<ConteosSegmento> {
-  const { whereSql, params } = normalizarFiltros(monedaOrFiltros, ruta, fuente, aerolinea, tipo_vuelo, region);
+  const { whereSql, params, filtros } = normalizarFiltros(monedaOrFiltros, ruta, fuente, aerolinea, tipo_vuelo, region);
+  const competidorFinal = filtros.competidor || competidor;
+  params.push(competidorFinal);
+  const competidorIdx = params.length;
   const client = await pool.connect();
 
   try {
-    // Misma logica de estado_almundo/spread_despegar que getTablaItinerariosAlmundo,
+    // Misma logica de estado_almundo/spread_competidor que getTablaItinerariosAlmundo,
     // pero solo agregada a conteos (sin traer filas ni paginar).
     const q = await client.query(
       `
@@ -628,10 +658,10 @@ export async function getConteosSegmento(
         WHERE ${whereSql} AND vendedor = 'Almundo'
         ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
       ),
-      despegar_best AS (
-        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio AS precio_despegar
+      competidor_best AS (
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio AS precio_competidor
         FROM precios_vuelos
-        WHERE ${whereSql} AND vendedor = 'Despegar'
+        WHERE ${whereSql} AND vendedor = $${competidorIdx}::text
         ORDER BY id_pareja_vuelo, fuente, precio ASC, posicion_vendedor ASC
       ),
       metricas AS (
@@ -646,18 +676,18 @@ export async function getConteosSegmento(
             ELSE 'DESALINEADO'
           END AS estado_almundo,
           CASE
-            WHEN a.precio_almundo IS NOT NULL AND d.precio_despegar IS NOT NULL
-              THEN (a.precio_almundo - d.precio_despegar)
+            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
+              THEN (a.precio_almundo - comp.precio_competidor)
             ELSE NULL
-          END AS spread_despegar_monto
+          END AS spread_competidor_monto
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
-        LEFT JOIN despegar_best d ON b.id_pareja_vuelo = d.id_pareja_vuelo AND b.fuente = d.fuente
+        LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
       )
       SELECT
         COUNT(*) AS total,
         COUNT(*) FILTER (WHERE estado_almundo = 'OPORTUNIDAD') AS oportunidades,
-        COUNT(*) FILTER (WHERE spread_despegar_monto < 0) AS vs_despegar,
+        COUNT(*) FILTER (WHERE spread_competidor_monto < 0) AS vs_competidor,
         COUNT(*) FILTER (WHERE estado_almundo = 'DESALINEADO') AS desalineados
       FROM metricas;
       `,
@@ -668,12 +698,12 @@ export async function getConteosSegmento(
     return {
       total: Number(r.total || 0),
       oportunidades: Number(r.oportunidades || 0),
-      vs_despegar: Number(r.vs_despegar || 0),
+      vs_competidor: Number(r.vs_competidor || 0),
       desalineados: Number(r.desalineados || 0)
     };
   } catch (err) {
     console.error('Error en getConteosSegmento:', err);
-    return { total: 0, oportunidades: 0, vs_despegar: 0, desalineados: 0 };
+    return { total: 0, oportunidades: 0, vs_competidor: 0, desalineados: 0 };
   } finally {
     client.release();
   }
@@ -739,6 +769,18 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
   const { whereSql, params } = normalizarFiltros(filtros);
   const client = await pool.connect();
 
+  // Competidor elegido para las comparaciones 1-a-1 (H2H, curvas de AP/estadia/
+  // dia/franja horaria, distribucion de posicion). IMPORTANTE: no se pushea a
+  // "params" -- Postgres rechaza una query si se le pasan MAS parametros
+  // bindeados de los que su texto referencia ("bind message supplies N
+  // parameters, but prepared statement requires M"), asi que las queries que
+  // NO usan competidor deben seguir recibiendo el "params" original sin tocar.
+  // "paramsConCompetidor" es un array aparte, solo para las queries de abajo
+  // que sí lo necesitan.
+  const competidorFinal = filtros.competidor || 'Despegar';
+  const paramsConCompetidor = [...params, competidorFinal];
+  const competidorIdx = paramsConCompetidor.length;
+
   try {
     // 1. Histograma de Gap % (Elasticidad)
     const qGap = await client.query(
@@ -797,30 +839,30 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       params
     );
 
-    // 3. Almundo vs Despegar: Spread Head-to-Head Relativo (%)
+    // 3. Almundo vs Competidor elegido: Spread Head-to-Head Relativo (%)
     const qH2H = await client.query(
       `
       WITH pares AS (
-        SELECT 
+        SELECT
           ruta,
           MIN(CASE WHEN vendedor = 'Almundo' THEN precio END) AS precio_almundo,
-          MIN(CASE WHEN vendedor = 'Despegar' THEN precio END) AS precio_despegar
+          MIN(CASE WHEN vendedor = $${competidorIdx}::text THEN precio END) AS precio_competidor
         FROM precios_vuelos
-        WHERE ${whereSql} AND vendedor IN ('Almundo', 'Despegar')
+        WHERE ${whereSql} AND vendedor IN ('Almundo', $${competidorIdx}::text)
         GROUP BY ruta, id_pareja_vuelo
         HAVING COUNT(DISTINCT vendedor) = 2
       )
-      SELECT 
+      SELECT
         ruta,
         COUNT(*) AS vuelos_comparados,
-        ROUND(AVG(((precio_almundo - precio_despegar) * 100.0 / NULLIF(precio_despegar, 0))), 1) AS spread_promedio_pct,
-        ROUND(AVG(precio_almundo - precio_despegar)) AS spread_promedio_monto
+        ROUND(AVG(((precio_almundo - precio_competidor) * 100.0 / NULLIF(precio_competidor, 0))), 1) AS spread_promedio_pct,
+        ROUND(AVG(precio_almundo - precio_competidor)) AS spread_promedio_monto
       FROM pares
       GROUP BY ruta
       ORDER BY vuelos_comparados DESC
       LIMIT 12;
       `,
-      params
+      paramsConCompetidor
     );
 
     // 4. Curva de Anticipacion (Advance Purchase)
@@ -829,12 +871,49 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       SELECT 
         dias_anticipacion,
         ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS almundo,
-        ROUND(AVG(CASE WHEN vendedor = 'Despegar' THEN gap_vs_min_pct * 100 END), 1) AS despegar,
+        ROUND(AVG(CASE WHEN vendedor = $${competidorIdx}::text THEN gap_vs_min_pct * 100 END), 1) AS competidor,
         ROUND(AVG(CASE WHEN tipo_vendedor = 'AEROLINEA' THEN gap_vs_min_pct * 100 END), 1) AS canal_directo
       FROM precios_vuelos
       WHERE ${whereSql}
       GROUP BY dias_anticipacion
       ORDER BY dias_anticipacion ASC;
+      `,
+      paramsConCompetidor
+    );
+
+    // 4b. Volumen de Vuelos por Ventana de Anticipacion -- complementa la
+    // curva de AP (qAP) mostrando cuantos vuelos distintos sostienen cada
+    // punto de esa curva: un tramo con gap "optimo" pero poco volumen es una
+    // conclusion fragil, no una ventana confiable para accionar pauta.
+    const qVolumenAP = await client.query(
+      `
+      WITH ap_bucket AS (
+        SELECT
+          CASE
+            WHEN dias_anticipacion BETWEEN 0 AND 7 THEN '0-7d (Last Minute)'
+            WHEN dias_anticipacion BETWEEN 8 AND 21 THEN '8-21d'
+            WHEN dias_anticipacion BETWEEN 22 AND 45 THEN '22-45d'
+            ELSE '46d+ (Early Bird)'
+          END AS rango_ap,
+          CASE
+            WHEN dias_anticipacion BETWEEN 0 AND 7 THEN 1
+            WHEN dias_anticipacion BETWEEN 8 AND 21 THEN 2
+            WHEN dias_anticipacion BETWEEN 22 AND 45 THEN 3
+            ELSE 4
+          END AS orden_ap,
+          id_pareja_vuelo,
+          vendedor,
+          gap_vs_min_pct
+        FROM precios_vuelos
+        WHERE ${whereSql} AND dias_anticipacion IS NOT NULL
+      )
+      SELECT
+        rango_ap,
+        COUNT(DISTINCT id_pareja_vuelo) AS total_vuelos,
+        ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS gap_almundo
+      FROM ap_bucket
+      GROUP BY rango_ap, orden_ap
+      ORDER BY orden_ap ASC;
       `,
       params
     );
@@ -865,13 +944,13 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       SELECT 
         rango_estadia,
         ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS almundo,
-        ROUND(AVG(CASE WHEN vendedor = 'Despegar' THEN gap_vs_min_pct * 100 END), 1) AS despegar,
+        ROUND(AVG(CASE WHEN vendedor = $${competidorIdx}::text THEN gap_vs_min_pct * 100 END), 1) AS competidor,
         ROUND(AVG(CASE WHEN tipo_vendedor = 'AEROLINEA' THEN gap_vs_min_pct * 100 END), 1) AS canal_directo
       FROM estadia_bucket
       GROUP BY rango_estadia, orden_estadia
       ORDER BY orden_estadia ASC;
       `,
-      params
+      paramsConCompetidor
     );
 
     // 6. Sensibilidad por Dia de Salida
@@ -884,7 +963,7 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       SELECT 
         od.dia AS dia_semana_vuelo,
         ROUND(AVG(CASE WHEN pv.vendedor = 'Almundo' THEN pv.gap_vs_min_pct * 100 END), 1) AS almundo,
-        ROUND(AVG(CASE WHEN pv.vendedor = 'Despegar' THEN pv.gap_vs_min_pct * 100 END), 1) AS despegar,
+        ROUND(AVG(CASE WHEN pv.vendedor = $${competidorIdx}::text THEN pv.gap_vs_min_pct * 100 END), 1) AS competidor,
         ROUND(AVG(CASE WHEN pv.tipo_vendedor = 'AEROLINEA' THEN pv.gap_vs_min_pct * 100 END), 1) AS canal_directo
       FROM orden_dias od
       LEFT JOIN precios_vuelos pv 
@@ -893,7 +972,7 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       GROUP BY od.dia, od.nro_dia
       ORDER BY od.nro_dia ASC;
       `,
-      params
+      paramsConCompetidor
     );
 
     // 7. Share of Voice por Ruta (Top 6 rutas)
@@ -904,7 +983,8 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
         COUNT(DISTINCT id_pareja_vuelo) AS total_vuelos,
         ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' THEN id_pareja_vuelo END) * 100.0 / NULLIF(COUNT(DISTINCT id_pareja_vuelo), 0), 1) AS almundo_pct,
         ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Despegar' THEN id_pareja_vuelo END) * 100.0 / NULLIF(COUNT(DISTINCT id_pareja_vuelo), 0), 1) AS despegar_pct,
-        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'TurismoCity' THEN id_pareja_vuelo END) * 100.0 / NULLIF(COUNT(DISTINCT id_pareja_vuelo), 0), 1) AS turismocity_pct
+        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'TurismoCity' THEN id_pareja_vuelo END) * 100.0 / NULLIF(COUNT(DISTINCT id_pareja_vuelo), 0), 1) AS turismocity_pct,
+        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Atrápalo' THEN id_pareja_vuelo END) * 100.0 / NULLIF(COUNT(DISTINCT id_pareja_vuelo), 0), 1) AS atrapalo_pct
       FROM precios_vuelos
       WHERE ${whereSql}
       GROUP BY ruta
@@ -948,20 +1028,49 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       params
     );
 
-    // 10. Evolucion Temporal del Gap (dia a dia)
-    const qEvolucion = await client.query(
+    // 10. Gap por Franja Horaria de Salida (reemplaza la vieja "Evolucion
+    // Temporal del Gap" por fecha de corrida del scraper -- ese dato era mas
+    // operativo/tecnico que de negocio. Mismo patron de bucketizacion que el
+    // bloque 5 (rango_estadia): franjas fijas sobre hora_salida_ida.
+    const qFranjaHoraria = await client.query(
       `
+      WITH franja_bucket AS (
+        SELECT
+          CASE
+            WHEN hora_salida_ida::time >= '00:00' AND hora_salida_ida::time < '06:00' THEN 'Madrugada'
+            WHEN hora_salida_ida::time >= '06:00' AND hora_salida_ida::time < '12:00' THEN 'Mañana'
+            WHEN hora_salida_ida::time >= '12:00' AND hora_salida_ida::time < '18:00' THEN 'Tarde'
+            ELSE 'Noche'
+          END AS franja_horaria,
+          CASE
+            WHEN hora_salida_ida::time >= '00:00' AND hora_salida_ida::time < '06:00' THEN '00-06h'
+            WHEN hora_salida_ida::time >= '06:00' AND hora_salida_ida::time < '12:00' THEN '06-12h'
+            WHEN hora_salida_ida::time >= '12:00' AND hora_salida_ida::time < '18:00' THEN '12-18h'
+            ELSE '18-24h'
+          END AS rango_horas,
+          CASE
+            WHEN hora_salida_ida::time >= '00:00' AND hora_salida_ida::time < '06:00' THEN 1
+            WHEN hora_salida_ida::time >= '06:00' AND hora_salida_ida::time < '12:00' THEN 2
+            WHEN hora_salida_ida::time >= '12:00' AND hora_salida_ida::time < '18:00' THEN 3
+            ELSE 4
+          END AS orden_franja,
+          vendedor,
+          tipo_vendedor,
+          gap_vs_min_pct
+        FROM precios_vuelos
+        WHERE ${whereSql} AND hora_salida_ida IS NOT NULL
+      )
       SELECT
-        TO_CHAR(DATE(fecha_obtencion), 'YYYY-MM-DD') AS fecha,
+        franja_horaria,
+        rango_horas,
         ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN gap_vs_min_pct * 100 END), 1) AS almundo,
-        ROUND(AVG(CASE WHEN vendedor = 'Despegar' THEN gap_vs_min_pct * 100 END), 1) AS despegar,
+        ROUND(AVG(CASE WHEN vendedor = $${competidorIdx}::text THEN gap_vs_min_pct * 100 END), 1) AS competidor,
         ROUND(AVG(CASE WHEN tipo_vendedor = 'AEROLINEA' THEN gap_vs_min_pct * 100 END), 1) AS canal_directo
-      FROM precios_vuelos
-      WHERE ${whereSql}
-      GROUP BY DATE(fecha_obtencion)
-      ORDER BY DATE(fecha_obtencion) ASC;
+      FROM franja_bucket
+      GROUP BY franja_horaria, rango_horas, orden_franja
+      ORDER BY orden_franja ASC;
       `,
-      params
+      paramsConCompetidor
     );
 
     // 11. Gap Almundo: ARS vs USD por ruta bimonetaria. Usa un WHERE propio
@@ -987,6 +1096,44 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       ORDER BY ruta ASC;
       `,
       paramsSinMoneda
+    );
+
+    // 11. Distribucion de Posicion en Pantalla por Vendedor: el "Ranking
+    // Promedio" (qRanking) es un solo numero que puede esconder una
+    // distribucion bimodal (a veces #1, a veces #8) -- esto muestra el %
+    // real de apariciones en cada rango de posicion, comparable entre
+    // vendedores aunque tengan distinto volumen de cotizaciones.
+    const qDistribucionPosicion = await client.query(
+      `
+      WITH base AS (
+        SELECT
+          vendedor,
+          CASE
+            WHEN posicion_vendedor = 1 THEN '#1'
+            WHEN posicion_vendedor = 2 THEN '#2'
+            WHEN posicion_vendedor = 3 THEN '#3'
+            ELSE '#4+'
+          END AS rango_posicion,
+          CASE
+            WHEN posicion_vendedor = 1 THEN 1
+            WHEN posicion_vendedor = 2 THEN 2
+            WHEN posicion_vendedor = 3 THEN 3
+            ELSE 4
+          END AS orden_posicion
+        FROM precios_vuelos
+        WHERE ${whereSql} AND posicion_vendedor IS NOT NULL AND vendedor IN ('Almundo', $${competidorIdx}::text)
+      )
+      SELECT
+        rango_posicion,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE vendedor = 'Almundo')
+          / NULLIF(SUM(COUNT(*) FILTER (WHERE vendedor = 'Almundo')) OVER (), 0), 1) AS almundo_pct,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE vendedor = $${competidorIdx}::text)
+          / NULLIF(SUM(COUNT(*) FILTER (WHERE vendedor = $${competidorIdx}::text)) OVER (), 0), 1) AS competidor_pct
+      FROM base
+      GROUP BY rango_posicion, orden_posicion
+      ORDER BY orden_posicion ASC;
+      `,
+      paramsConCompetidor
     );
 
     // 12. Correlacion Precio vs Posicion en Pantalla (Ad Rank): compara la
@@ -1030,19 +1177,24 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       datosAP: qAP.rows.map(r => ({
         dias_anticipacion: Number(r.dias_anticipacion),
         almundo: r.almundo !== null ? Number(r.almundo) : null,
-        despegar: r.despegar !== null ? Number(r.despegar) : null,
+        competidor: r.competidor !== null ? Number(r.competidor) : null,
         canal_directo: r.canal_directo !== null ? Number(r.canal_directo) : null
+      })),
+      datosVolumenAP: qVolumenAP.rows.map(r => ({
+        rango_ap: r.rango_ap,
+        total_vuelos: Number(r.total_vuelos),
+        gap_almundo: r.gap_almundo !== null ? Number(r.gap_almundo) : null
       })),
       datosEstadia: qEstadia.rows.map(r => ({
         rango_estadia: r.rango_estadia,
         almundo: r.almundo !== null ? Number(r.almundo) : null,
-        despegar: r.despegar !== null ? Number(r.despegar) : null,
+        competidor: r.competidor !== null ? Number(r.competidor) : null,
         canal_directo: r.canal_directo !== null ? Number(r.canal_directo) : null
       })),
       datosDiaSemana: qDiaSemana.rows.map(r => ({
         dia_semana_vuelo: r.dia_semana_vuelo,
         almundo: r.almundo !== null ? Number(r.almundo) : null,
-        despegar: r.despegar !== null ? Number(r.despegar) : null,
+        competidor: r.competidor !== null ? Number(r.competidor) : null,
         canal_directo: r.canal_directo !== null ? Number(r.canal_directo) : null
       })),
       datosShareGanadoresRuta: qSOV.rows.map(r => ({
@@ -1050,7 +1202,8 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
         total_vuelos: Number(r.total_vuelos),
         almundo_pct: Number(r.almundo_pct || 0),
         despegar_pct: Number(r.despegar_pct || 0),
-        turismocity_pct: Number(r.turismocity_pct || 0)
+        turismocity_pct: Number(r.turismocity_pct || 0),
+        atrapalo_pct: Number(r.atrapalo_pct || 0)
       })),
       datosMarkup: qMarkup.rows.map(r => ({
         aerolinea: r.aerolinea,
@@ -1063,10 +1216,16 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
         vendedor: r.vendedor,
         ranking_promedio: Number(Number(r.ranking_promedio || 0).toFixed(1))
       })),
-      datosEvolucionTemporal: qEvolucion.rows.map(r => ({
-        fecha: r.fecha,
+      datosDistribucionPosicion: qDistribucionPosicion.rows.map(r => ({
+        rango_posicion: r.rango_posicion,
+        almundo_pct: r.almundo_pct !== null ? Number(r.almundo_pct) : null,
+        competidor_pct: r.competidor_pct !== null ? Number(r.competidor_pct) : null
+      })),
+      datosFranjaHoraria: qFranjaHoraria.rows.map(r => ({
+        franja_horaria: r.franja_horaria,
+        rango_horas: r.rango_horas,
         almundo: r.almundo !== null ? Number(r.almundo) : null,
-        despegar: r.despegar !== null ? Number(r.despegar) : null,
+        competidor: r.competidor !== null ? Number(r.competidor) : null,
         canal_directo: r.canal_directo !== null ? Number(r.canal_directo) : null
       })),
       datosGapMoneda: qGapMoneda.rows.map(r => ({
@@ -1102,6 +1261,28 @@ const REGIONES_FALLBACK = [
   'PATAGONIA', 'CHILE', 'BRASIL', 'CARIBE', 'EEUU', 'EUROPA'
 ];
 const TIPOS_VUELO_FALLBACK = ['INTERNACIONAL', 'DOMESTICO'];
+const COMPETIDORES_FALLBACK = ['Despegar', 'Atrápalo', 'TurismoCity'];
+
+// Vendedores utilizables como "competidor" en el filtro de comparacion 1-a-1:
+// excluye a Almundo (el vendedor propio) y al canal directo (tipo_vendedor
+// AEROLINEA), que se trata aparte en todos los graficos.
+export async function getCompetidoresDisponibles(moneda?: string): Promise<string[]> {
+  try {
+    const whereClauses = [`vendedor != 'Almundo'`, `tipo_vendedor != 'AEROLINEA'`];
+    const params: any[] = [];
+    if (moneda && moneda !== 'TODAS') {
+      params.push(moneda);
+      whereClauses.push(`moneda = $${params.length}`);
+    }
+    const res = await pool.query(
+      `SELECT DISTINCT vendedor FROM precios_vuelos WHERE ${whereClauses.join(' AND ')} ORDER BY vendedor ASC;`,
+      params
+    );
+    return res.rows.length > 0 ? res.rows.map(r => r.vendedor) : COMPETIDORES_FALLBACK;
+  } catch {
+    return COMPETIDORES_FALLBACK;
+  }
+}
 
 export async function getFuentesDisponibles(moneda?: string): Promise<string[]> {
   try {

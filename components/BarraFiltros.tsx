@@ -16,6 +16,7 @@ interface Props {
   aerolineaActual?: string;
   tipoVuelo?: string;
   region?: string;
+  competidor?: string;
 
   // Listas dinamicas opcionales
   rutas?: string[];
@@ -23,6 +24,7 @@ interface Props {
   fuentes?: string[];
   regiones?: string[];
   tiposVuelo?: string[];
+  competidores?: string[];
 
   // Conteos por opcion (mejora #5): "AEP-COR (18)" en vez de solo "AEP-COR".
   // Opcionales -- si no llegan, el select funciona igual pero sin el numero.
@@ -52,6 +54,7 @@ const REGIONES_DEFAULT = [
   'PATAGONIA', 'CHILE', 'BRASIL', 'CARIBE', 'EEUU', 'EUROPA'
 ];
 const TIPOS_VUELO_DEFAULT = ['INTERNACIONAL', 'DOMESTICO'];
+const COMPETIDORES_DEFAULT = ['Despegar', 'Atrápalo', 'TurismoCity'];
 
 // Los valores reales en la DB pueden venir en cualquier casing
 // ('INTERNACIONAL', 'Internacional', etc.) — esto normaliza solo la etiqueta
@@ -80,12 +83,14 @@ export default function BarraFiltros(props: Props) {
   const aeroAct = props.aerolinea || props.aerolineaActual || 'TODAS';
   const tipoVueloAct = props.tipoVuelo || 'TODOS';
   const regionAct = props.region || 'TODAS';
+  const competidorAct = props.competidor || 'Despegar';
 
   const listaFuentes = props.fuentes && props.fuentes.length > 0 ? props.fuentes : FUENTES_DEFAULT;
   const listaRutas = props.rutas && props.rutas.length > 0 ? props.rutas : RUTAS_DEFAULT;
   const listaAeros = props.aerolineas && props.aerolineas.length > 0 ? props.aerolineas : AEROLINEAS_DEFAULT;
   const listaRegiones = props.regiones && props.regiones.length > 0 ? props.regiones : REGIONES_DEFAULT;
   const listaTiposVuelo = props.tiposVuelo && props.tiposVuelo.length > 0 ? props.tiposVuelo : TIPOS_VUELO_DEFAULT;
+  const listaCompetidores = props.competidores && props.competidores.length > 0 ? props.competidores : COMPETIDORES_DEFAULT;
 
   // Mejora #3: un select/toggle se resalta con borde naranja tenue cuando su
   // valor no es el default ("TODAS"/"TODOS") -- da un vistazo rapido de que
@@ -106,6 +111,27 @@ export default function BarraFiltros(props: Props) {
     }
 
     // Al cambiar cualquier filtro, volvemos a la pagina 1 en caso de paginacion
+    if (params.has('pagina')) {
+      params.set('pagina', '1');
+    }
+
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  };
+
+  // "Competidor" no tiene un default tipo "TODAS"/"TODOS" -- su default es
+  // 'Despegar', asi que necesita su propio criterio de cuando limpiar el
+  // parametro de la URL en vez de reusar actualizarFiltro().
+  const actualizarCompetidor = (valor: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (valor && valor !== 'Despegar') {
+      params.set('competidor', valor);
+    } else {
+      params.delete('competidor');
+    }
+
     if (params.has('pagina')) {
       params.set('pagina', '1');
     }
@@ -215,6 +241,24 @@ export default function BarraFiltros(props: Props) {
                 <option key={f} value={f}>
                   {conCantidad(f, f, props.conteoFuentes)}
                 </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
+        </div>
+
+        {/* Filtro: Competidor a comparar (1-a-1 vs. Almundo) */}
+        <div className={claseChip(competidorAct !== 'Despegar')}>
+          <label htmlFor="select-competidor" className="text-[11px] font-medium text-slate-500">Comparar vs</label>
+          <div className="relative">
+            <select
+              id="select-competidor"
+              value={competidorAct}
+              onChange={(e) => actualizarCompetidor(e.target.value)}
+              className={claseSelect}
+            >
+              {listaCompetidores.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
             <Flecha />
