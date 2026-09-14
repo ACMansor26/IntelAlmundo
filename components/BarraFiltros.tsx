@@ -41,10 +41,16 @@ const RUTAS_DEFAULT = [
   'AEP-SCL', 'AEP-RIO', 'AEP-GRU', 'EZE-MIA', 'EZE-MAD', 'EZE-CUN', 'EZE-PUJ'
 ];
 
+// Top 7 por volumen + "Otras" -- mismo criterio de consolidacion que
+// exprAerolineaPrincipal() en lib/data.ts (la aerolinea cruda trae combos de
+// conexion, ej. "LATAM / GOL", que sin esto explotaban en 43 opciones).
 const AEROLINEAS_DEFAULT = [
-  'Aerolíneas Argentinas', 'JetSmart', 'LATAM', 'Iberia',
-  'Air Europa', 'Copa Airlines', 'GOL', 'SKY Airline'
+  'Aerolíneas Argentinas', 'JetSmart', 'LATAM', 'Arajet', 'GOL', 'Avianca', 'SKY Airline', 'OTRAS'
 ];
+
+// El valor real que viaja en la URL/query sigue siendo 'OTRAS' (para que el
+// filtro SQL lo matchee), pero se muestra con una etiqueta legible.
+const etiquetarAerolinea = (valor: string) => (valor === 'OTRAS' ? 'Otras aerolíneas' : valor);
 
 // Fix: antes region/regiones/tipoVuelo llegaban como props desde page.tsx y se
 // descartaban sin usarse en este componente. Estos fallbacks siguen el mismo
@@ -324,7 +330,7 @@ export default function BarraFiltros(props: Props) {
               <option value="TODAS">Todas las Aerolíneas</option>
               {listaAeros.map((a) => (
                 <option key={a} value={a}>
-                  {conCantidad(a, a, props.conteoAerolineas)}
+                  {conCantidad(etiquetarAerolinea(a), a, props.conteoAerolineas)}
                 </option>
               ))}
             </select>

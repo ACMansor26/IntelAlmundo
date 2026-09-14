@@ -215,6 +215,29 @@ export interface CorridaJobDetalle {
 }
 
 // ==============================================================================
+// 2b. CONSOLIDACION DE AEROLINEA (Top 7 por volumen + "Otras")
+// ==============================================================================
+// El campo crudo "aerolinea" concatena, para itinerarios con conexion, cada
+// tramo separado por " / " (ej. "LATAM / GOL / Avianca"), lo que produce 43
+// valores distintos en la DB -- inmanejable como filtro. Se consolida a la
+// aerolinea del PRIMER tramo (la que efectivamente opera el despegue), y todo
+// lo que no esta en este Top 7 (medido por volumen real: Aerolineas
+// Argentinas y JetSmart concentran mas del 70% de las filas) se agrupa en
+// 'OTRAS' (Air Canada, Aeromexico, SWISS, Ethiopian Air -- <10 filas c/u).
+const AEROLINEAS_PRINCIPALES = [
+  'Aerolíneas Argentinas', 'JetSmart', 'LATAM', 'Arajet', 'GOL', 'Avianca', 'SKY Airline'
+];
+
+// Fragmento SQL reutilizado en cualquier lugar que filtre o agrupe por
+// aerolinea, para que el filtro (BarraFiltros), los conteos por opcion
+// (getConteosFiltros) y el grafico de Markup por Aerolinea usen exactamente
+// el mismo criterio de consolidacion.
+function exprAerolineaPrincipal(): string {
+  const lista = AEROLINEAS_PRINCIPALES.map(a => `'${a.replace(/'/g, "''")}'`).join(', ');
+  return `(CASE WHEN split_part(aerolinea, ' / ', 1) IN (${lista}) THEN split_part(aerolinea, ' / ', 1) ELSE 'OTRAS' END)`;
+}
+
+// ==============================================================================
 // 3. HELPER DE FILTROS SQL
 // ==============================================================================
 function normalizarFiltros(
@@ -252,7 +275,7 @@ function normalizarFiltros(
   }
   if (f.aerolinea && f.aerolinea !== 'TODAS') {
     params.push(f.aerolinea);
-    whereClauses.push(`aerolinea = $${params.length}`);
+    whereClauses.push(`${exprAerolineaPrincipal()} = $${params.length}`);
   }
   if (f.tipo_vuelo && f.tipo_vuelo !== 'TODOS') {
     params.push(f.tipo_vuelo);
@@ -284,7 +307,7 @@ function construirWhereSinMoneda(f: FiltrosDashboard): { whereSql: string; param
   }
   if (f.aerolinea && f.aerolinea !== 'TODAS') {
     params.push(f.aerolinea);
-    whereClauses.push(`aerolinea = $${params.length}`);
+    whereClauses.push(`${exprAerolineaPrincipal()} = $${params.length}`);
   }
   if (f.tipo_vuelo && f.tipo_vuelo !== 'TODOS') {
     params.push(f.tipo_vuelo);
@@ -733,10 +756,15 @@ export async function getConteosFiltros(filtros: FiltrosDashboard): Promise<Cont
   ): Promise<Record<string, number>> {
     const filtrosSinCampo: FiltrosDashboard = { ...filtros, [excluirCampo]: undefined };
     const { whereSql, params } = normalizarFiltros(filtrosSinCampo);
+    // La aerolinea cruda trae combos de conexion (43 valores distintos) -- se
+    // agrupa por el mismo criterio de "aerolinea principal" que usa el filtro
+    // real (exprAerolineaPrincipal), asi el conteo que ve el usuario en el
+    // select coincide con las opciones consolidadas (Top 7 + "Otras").
+    const selectExpr = campo === 'aerolinea' ? exprAerolineaPrincipal() : campo;
     try {
       const q = await client.query(
-        `SELECT ${campo}, COUNT(DISTINCT id_pareja_vuelo) AS cantidad
-         FROM precios_vuelos WHERE ${whereSql} GROUP BY ${campo};`,
+        `SELECT ${selectExpr} AS ${campo}, COUNT(DISTINCT id_pareja_vuelo) AS cantidad
+         FROM precios_vuelos WHERE ${whereSql} GROUP BY 1;`,
         params
       );
       const mapa: Record<string, number> = {};
@@ -995,10 +1023,13 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
     );
 
     // 8. Markup vs Canal Directo por Aerolinea (Almundo, Despegar, TurismoCity y Atrápalo)
+    // Fix: "aerolinea" cruda trae combos de conexion (43 valores distintos) --
+    // se consolida con el mismo criterio del filtro (exprAerolineaPrincipal),
+    // si no este grafico quedaba con un eje X ilegible de docenas de barras.
     const qMarkup = await client.query(
       `
-      SELECT 
-        aerolinea,
+      SELECT
+        ${exprAerolineaPrincipal()} AS aerolinea,
         ROUND(AVG(CASE WHEN vendedor = 'Almundo' THEN markup_vs_directo_pct * 100 END), 1) AS almundo,
         ROUND(AVG(CASE WHEN vendedor = 'Despegar' THEN markup_vs_directo_pct * 100 END), 1) AS despegar,
         ROUND(AVG(CASE WHEN vendedor = 'TurismoCity' THEN markup_vs_directo_pct * 100 END), 1) AS turismocity,
@@ -1006,9 +1037,9 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
       FROM precios_vuelos
       WHERE ${whereSql}
         AND markup_vs_directo_pct IS NOT NULL
-      GROUP BY aerolinea
+      GROUP BY 1
       HAVING COUNT(DISTINCT vendedor) >= 2
-      ORDER BY aerolinea ASC;
+      ORDER BY 1 ASC;
       `,
       params
     );
@@ -1248,10 +1279,7 @@ export async function obtenerDatosDashboard(filtros: FiltrosDashboard) {
 // 7. FUNCIONES DE SELECTORES DINAMICOS
 // ==============================================================================
 const FUENTES_FALLBACK = ['TurismoCity', 'Kayak'];
-const AEROLINEAS_FALLBACK = [
-  'Aerolíneas Argentinas', 'JetSmart', 'LATAM', 'Iberia',
-  'Air Europa', 'Copa Airlines', 'GOL', 'SKY Airline'
-];
+const AEROLINEAS_FALLBACK = [...AEROLINEAS_PRINCIPALES, 'OTRAS'];
 const RUTAS_FALLBACK = [
   'AEP-COR', 'AEP-MDZ', 'AEP-BRC', 'AEP-SLA', 'AEP-IGR', 'AEP-TUC', 'COR-MDZ',
   'AEP-SCL', 'AEP-RIO', 'AEP-GRU', 'EZE-MIA', 'EZE-MAD', 'EZE-CUN', 'EZE-PUJ'
@@ -1303,10 +1331,17 @@ export async function getAerolineasDisponibles(moneda?: string): Promise<string[
     const clause = moneda && moneda !== 'TODAS' ? 'WHERE moneda = $1' : '';
     const params = moneda && moneda !== 'TODAS' ? [moneda] : [];
     const res = await pool.query(
-      `SELECT DISTINCT aerolinea FROM precios_vuelos ${clause} ORDER BY aerolinea ASC;`,
+      `SELECT DISTINCT ${exprAerolineaPrincipal()} AS aerolinea FROM precios_vuelos ${clause};`,
       params
     );
-    return res.rows.length > 0 ? res.rows.map(r => r.aerolinea) : AEROLINEAS_FALLBACK;
+    if (res.rows.length === 0) return AEROLINEAS_FALLBACK;
+    // Orden fijo por volumen historico (no alfabetico) -- "Otras" siempre al
+    // final. Solo se listan las opciones que realmente tienen datos para esta
+    // moneda (evita mostrar una aerolinea en 0 en el select).
+    const presentes = new Set(res.rows.map(r => r.aerolinea));
+    const ordenadas = AEROLINEAS_PRINCIPALES.filter(a => presentes.has(a));
+    if (presentes.has('OTRAS')) ordenadas.push('OTRAS');
+    return ordenadas;
   } catch {
     return AEROLINEAS_FALLBACK;
   }
