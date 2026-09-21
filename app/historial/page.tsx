@@ -2,7 +2,7 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
-import { getHistorialCorridas, getDetalleCorrida, type CorridaJobDetalle } from '@/lib/data';
+import { getHistorialCorridas, getDetalleCorrida, getFechasConCorridas, type CorridaJobDetalle } from '@/lib/data';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ const heading = '[font-family:var(--font-heading)]';
 const dato = '[font-family:var(--font-data)] tabular-nums';
 
 type PageProps = {
-  searchParams: Promise<{ run?: string; estado?: string; recuperados?: string }> | { run?: string; estado?: string; recuperados?: string };
+  searchParams: Promise<{ run?: string; estado?: string; recuperados?: string; fecha?: string }> | { run?: string; estado?: string; recuperados?: string; fecha?: string };
 };
 
 function formatoSeg(val: number | null): string {
@@ -58,7 +58,12 @@ export default async function HistorialPage(props: PageProps) {
   const estado = normalizarEstado(resolvedSearchParams?.estado);
   const soloRecuperados = resolvedSearchParams?.recuperados === '1';
 
-  const corridas = await getHistorialCorridas(30);
+  const fechasDisponibles = await getFechasConCorridas();
+  const fechaFiltro = resolvedSearchParams?.fecha && fechasDisponibles.includes(resolvedSearchParams.fecha)
+    ? resolvedSearchParams.fecha
+    : undefined;
+
+  const corridas = await getHistorialCorridas(fechaFiltro);
   const runSeleccionado = runIdParam && corridas.some(c => c.id === runIdParam)
     ? runIdParam
     : (corridas[0]?.id ?? null);
@@ -90,6 +95,16 @@ export default async function HistorialPage(props: PageProps) {
     const p = new URLSearchParams({ estado: targetEstado });
     if (runSeleccionado !== null) p.set('run', String(runSeleccionado));
     if (targetRecuperados) p.set('recuperados', '1');
+    if (fechaFiltro) p.set('fecha', fechaFiltro);
+    return `/historial?${p.toString()}`;
+  };
+
+  // Cambiar de fecha resetea "run" a proposito -- la corrida seleccionada
+  // puede no existir en el nuevo dia, y getHistorialCorridas ya hace el
+  // fallback al primer resultado disponible.
+  const buildFechaUrl = (targetFecha: string | null) => {
+    const p = new URLSearchParams();
+    if (targetFecha) p.set('fecha', targetFecha);
     return `/historial?${p.toString()}`;
   };
 
@@ -137,10 +152,37 @@ export default async function HistorialPage(props: PageProps) {
     </header>
   );
 
+  const filtroFecha = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Link
+        href={buildFechaUrl(null)}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+          !fechaFiltro ? 'bg-[#FF5A00] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        Todos
+      </Link>
+      <div className="flex flex-wrap gap-1.5">
+        {fechasDisponibles.map((f) => (
+          <Link
+            key={f}
+            href={buildFechaUrl(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${dato} ${
+              fechaFiltro === f ? 'bg-[#FF5A00] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {f}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+
   if (corridas.length === 0) {
     return (
       <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
         {header}
+        {fechasDisponibles.length > 0 && filtroFecha}
         <div className="bg-rose-950/30 border border-rose-800/50 rounded-2xl p-6 text-center text-rose-300">
           <p className="font-semibold text-sm">Todavía no hay búsquedas registradas.</p>
           <p className="text-xs text-rose-400 mt-1">
@@ -154,6 +196,7 @@ export default async function HistorialPage(props: PageProps) {
   return (
     <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
       {header}
+      {filtroFecha}
 
       {/* Tabla de corridas */}
       <section className="rounded-2xl border border-white/10 bg-[#10182B] overflow-hidden">

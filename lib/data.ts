@@ -1404,7 +1404,7 @@ export async function getTiposVueloDisponibles(moneda?: string): Promise<string[
 // existen (ninguna corrida con el nuevo logging fue ejecutada aun) las queries
 // devuelven [] en vez de romper la pagina.
 // ==============================================================================
-export async function getHistorialCorridas(limite: number = 20): Promise<CorridaScraper[]> {
+export async function getHistorialCorridas(fechaExacta?: string): Promise<CorridaScraper[]> {
   try {
     const res = await pool.query(
       `
@@ -1419,10 +1419,10 @@ export async function getHistorialCorridas(limite: number = 20): Promise<Corrida
         jobs_segunda_pasada, jobs_recuperados_segunda_pasada, watchdog_kills_fase2,
         csv_path
       FROM scraper_runs
-      ORDER BY fecha_inicio DESC
-      LIMIT $1;
+      ${fechaExacta ? 'WHERE DATE(fecha_inicio) = $1::date' : ''}
+      ORDER BY fecha_inicio DESC;
       `,
-      [limite]
+      fechaExacta ? [fechaExacta] : []
     );
 
     return res.rows.map(r => ({
@@ -1451,6 +1451,19 @@ export async function getHistorialCorridas(limite: number = 20): Promise<Corrida
     }));
   } catch (err) {
     console.error('Error en getHistorialCorridas (¿la tabla scraper_runs todavía no existe?):', err);
+    return [];
+  }
+}
+
+export async function getFechasConCorridas(): Promise<string[]> {
+  try {
+    const res = await pool.query(
+      `SELECT DISTINCT TO_CHAR(fecha_inicio, 'YYYY-MM-DD') AS fecha
+       FROM scraper_runs
+       ORDER BY fecha DESC;`
+    );
+    return res.rows.map(r => r.fecha);
+  } catch {
     return [];
   }
 }
