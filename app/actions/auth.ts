@@ -2,22 +2,43 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { COOKIE_SESION, DURACION_SESION_SEG, crearToken, igualesSeguro } from '@/lib/session';
 
-export async function loginModalAction(usuario: string, password: string) {
+export async function loginAction(usuario: string, password: string) {
   const validUser = process.env.DASHBOARD_USER || 'cvccorp';
-  const validPass = process.env.DASHBOARD_PASSWORD || 'Almundo2026!';
+  // Sin DASHBOARD_PASSWORD en el entorno NADIE puede entrar (antes habia una
+  // contraseña por defecto escrita en el codigo).
+  const validPass = process.env.DASHBOARD_PASSWORD;
 
-  if (usuario.trim() === validUser && password.trim() === validPass) {
+  if (!validPass) {
+    return { success: false, error: 'El acceso no está configurado en el servidor.' };
+  }
+
+  const okUser = igualesSeguro(usuario.trim(), validUser);
+  const okPass = igualesSeguro(password.trim(), validPass);
+
+  if (okUser && okPass) {
+    const token = await crearToken();
+    if (!token) return { success: false, error: 'El acceso no está configurado en el servidor.' };
     const cookieStore = await cookies();
-    cookieStore.set('almundo_auth_session', 'authenticated', {
+    cookieStore.set(COOKIE_SESION, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 días de sesión activa
+      maxAge: DURACION_SESION_SEG,
       path: '/',
     });
     return { success: true };
   }
 
+  // Frena un poco los intentos automaticos de fuerza bruta.
+  await new Promise((r) => setTimeout(r, 800));
   return { success: false, error: 'Usuario o contraseña incorrectos.' };
+}
+
+export async function logoutAction() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_SESION);
+  redirect('/login');
 }

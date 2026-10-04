@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useTransition } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 interface Props {
@@ -17,6 +18,9 @@ interface Props {
   tipoVuelo?: string;
   region?: string;
   competidor?: string;
+  // Corrida de datos: 'ULTIMA' (default), 'TODAS' o 'YYYY-MM-DD'
+  fecha?: string;
+  fechas?: string[];
 
   // Listas dinamicas opcionales
   rutas?: string[];
@@ -34,7 +38,7 @@ interface Props {
   conteoFuentes?: Record<string, number>;
 }
 
-const FUENTES_DEFAULT = ['TurismoCity', 'Kayak'];
+const FUENTES_DEFAULT = ['TurismoCity', 'Kayak', 'Skyscanner'];
 
 const RUTAS_DEFAULT = [
   'AEP-COR', 'AEP-MDZ', 'AEP-BRC', 'AEP-SLA', 'AEP-IGR', 'AEP-TUC', 'COR-MDZ',
@@ -60,7 +64,7 @@ const REGIONES_DEFAULT = [
   'PATAGONIA', 'CHILE', 'BRASIL', 'CARIBE', 'EEUU', 'EUROPA'
 ];
 const TIPOS_VUELO_DEFAULT = ['INTERNACIONAL', 'DOMESTICO'];
-const COMPETIDORES_DEFAULT = ['Despegar', 'Atrápalo', 'TurismoCity'];
+const COMPETIDORES_DEFAULT = ['Despegar', 'Atrápalo'];
 
 // Los valores reales en la DB pueden venir en cualquier casing
 // ('INTERNACIONAL', 'Internacional', etc.) — esto normaliza solo la etiqueta
@@ -90,6 +94,8 @@ export default function BarraFiltros(props: Props) {
   const tipoVueloAct = props.tipoVuelo || 'TODOS';
   const regionAct = props.region || 'TODAS';
   const competidorAct = props.competidor || 'Despegar';
+  const fechaAct = props.fecha || 'ULTIMA';
+  const listaFechas = props.fechas ?? [];
 
   const listaFuentes = props.fuentes && props.fuentes.length > 0 ? props.fuentes : FUENTES_DEFAULT;
   const listaRutas = props.rutas && props.rutas.length > 0 ? props.rutas : RUTAS_DEFAULT;
@@ -103,8 +109,8 @@ export default function BarraFiltros(props: Props) {
   // filtros estan activos sin tener que leer cada chip.
   const activo = (valor: string) => valor !== 'TODAS' && valor !== 'TODOS';
   const claseChip = (esActivo: boolean) =>
-    `flex items-center gap-2 border rounded-lg px-3 py-2 transition-colors ${
-      esActivo ? 'bg-[#FF5A00]/[0.06] border-[#FF5A00]/40' : 'bg-[#050810] border-white/10'
+    `flex items-center justify-between sm:justify-start gap-2 border rounded-lg px-3 py-2 transition-colors ${
+      esActivo ? 'bg-[color:var(--acc)]/[0.06] border-[color:var(--acc)]/40' : 'bg-[color:var(--sunk2)] border-white/10'
     }`;
 
   const actualizarFiltro = (clave: string, valor: string) => {
@@ -147,6 +153,26 @@ export default function BarraFiltros(props: Props) {
     });
   };
 
+  const actualizarFecha = (valor: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (valor && valor !== 'ULTIMA') {
+      params.set('fecha', valor);
+    } else {
+      params.delete('fecha');
+    }
+    if (params.has('pagina')) {
+      params.set('pagina', '1');
+    }
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
+  };
+
+  const etiquetaFecha = (f: string) => {
+    const [y, m, d] = f.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   // Mejora #4: "Limpiar filtros" -- resetea ruta/región/aerolínea/metabuscador
   // (no moneda ni tipo de vuelo, que son mas un modo de vista que un filtro
   // de recorte) y solo se muestra si alguno de esos esta activo.
@@ -168,29 +194,27 @@ export default function BarraFiltros(props: Props) {
   // propia dibujada a mano -- así no rompen la consistencia visual con el
   // resto de los controles según el sistema operativo/navegador del usuario.
   const claseSelect =
-    'appearance-none bg-[#0B1120] border border-white/10 text-slate-200 text-xs rounded-md ' +
-    'pl-2.5 pr-7 py-1 focus:outline-none focus:border-[#FF5A00] transition-colors cursor-pointer';
+    'appearance-none bg-[color:var(--sunk)] border border-white/10 text-slate-200 text-xs rounded-md ' +
+    'pl-2.5 pr-7 py-1 focus:border-[color:var(--acc)] transition-colors cursor-pointer min-h-8';
 
   const Flecha = () => (
-    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">
-      ▾
-    </span>
+    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
   );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#10182B] p-3 space-y-3">
+    <div className="rounded-2xl border border-white/10 bg-[color:var(--surf)] p-3 space-y-3">
 
       {/* Fila 1: Moneda, Tipo de Vuelo, Metabuscador */}
-      <div className="flex flex-wrap items-center justify-center gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-2 sm:gap-3">
 
         {/* Moneda */}
         <div className={claseChip(false)}>
-          <span className="text-[11px] font-medium text-slate-500">Moneda</span>
-          <div className="inline-flex bg-[#0B1120] rounded-md p-1">
+          <span className="text-[11px] font-medium text-slate-400">Moneda</span>
+          <div className="inline-flex bg-[color:var(--sunk)] rounded-md p-1">
             <button
               onClick={() => actualizarFiltro('moneda', 'ARS')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                monedaAct === 'ARS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                monedaAct === 'ARS' ? 'bg-[color:var(--acc)] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               ARS ($)
@@ -198,7 +222,7 @@ export default function BarraFiltros(props: Props) {
             <button
               onClick={() => actualizarFiltro('moneda', 'USD')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                monedaAct === 'USD' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                monedaAct === 'USD' ? 'bg-[color:var(--acc)] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               USD (US$)
@@ -208,12 +232,12 @@ export default function BarraFiltros(props: Props) {
 
         {/* Tipo de Vuelo */}
         <div className={claseChip(false)}>
-          <span className="text-[11px] font-medium text-slate-500">Tipo de Vuelo</span>
-          <div className="inline-flex bg-[#0B1120] rounded-md p-1">
+          <span className="text-[11px] font-medium text-slate-400">Tipo de Vuelo</span>
+          <div className="inline-flex bg-[color:var(--sunk)] rounded-md p-1">
             <button
               onClick={() => actualizarFiltro('tipo_vuelo', 'TODOS')}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                tipoVueloAct === 'TODOS' ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                tipoVueloAct === 'TODOS' ? 'bg-[color:var(--acc)] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
               Todos
@@ -223,7 +247,7 @@ export default function BarraFiltros(props: Props) {
                 key={t}
                 onClick={() => actualizarFiltro('tipo_vuelo', t)}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
-                  tipoVueloAct === t ? 'bg-[#FF5A00] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  tipoVueloAct === t ? 'bg-[color:var(--acc)] text-white shadow' : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
               >
                 {etiquetar(t)}
@@ -234,7 +258,7 @@ export default function BarraFiltros(props: Props) {
 
         {/* Filtro: Metabuscador */}
         <div className={claseChip(activo(fuenteAct))}>
-          <label htmlFor="select-fuente" className="text-[11px] font-medium text-slate-500">Metabuscador</label>
+          <label htmlFor="select-fuente" className="text-[11px] font-medium text-slate-400">Metabuscador</label>
           <div className="relative">
             <select
               id="select-fuente"
@@ -255,7 +279,7 @@ export default function BarraFiltros(props: Props) {
 
         {/* Filtro: Competidor a comparar (1-a-1 vs. Almundo) */}
         <div className={claseChip(competidorAct !== 'Despegar')}>
-          <label htmlFor="select-competidor" className="text-[11px] font-medium text-slate-500">Comparar vs</label>
+          <label htmlFor="select-competidor" className="text-[11px] font-medium text-slate-400">Comparar vs</label>
           <div className="relative">
             <select
               id="select-competidor"
@@ -270,14 +294,34 @@ export default function BarraFiltros(props: Props) {
             <Flecha />
           </div>
         </div>
+
+        {/* Filtro: corrida de datos (por defecto, la mas reciente de cada fuente) */}
+        <div className={claseChip(fechaAct !== 'ULTIMA')}>
+          <label htmlFor="select-fecha" className="text-[11px] font-medium text-slate-400">Datos</label>
+          <div className="relative">
+            <select
+              id="select-fecha"
+              value={fechaAct}
+              onChange={(e) => actualizarFecha(e.target.value)}
+              className={claseSelect}
+            >
+              <option value="ULTIMA">Última ejecución</option>
+              <option value="TODAS">Todo el histórico</option>
+              {listaFechas.map((f) => (
+                <option key={f} value={f}>{etiquetaFecha(f)}</option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
+        </div>
       </div>
 
       {/* Fila 2: Ruta, Región, Aerolínea */}
-      <div className="flex flex-wrap items-center justify-center gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-2 sm:gap-3">
 
         {/* Filtro: Ruta */}
         <div className={claseChip(activo(rutaAct))}>
-          <label htmlFor="select-ruta" className="text-[11px] font-medium text-slate-500">Ruta</label>
+          <label htmlFor="select-ruta" className="text-[11px] font-medium text-slate-400">Ruta</label>
           <div className="relative">
             <select
               id="select-ruta"
@@ -298,7 +342,7 @@ export default function BarraFiltros(props: Props) {
 
         {/* Filtro: Region — antes llegaba como prop y no se usaba */}
         <div className={claseChip(activo(regionAct))}>
-          <label htmlFor="select-region" className="text-[11px] font-medium text-slate-500">Región</label>
+          <label htmlFor="select-region" className="text-[11px] font-medium text-slate-400">Región</label>
           <div className="relative">
             <select
               id="select-region"
@@ -319,7 +363,7 @@ export default function BarraFiltros(props: Props) {
 
         {/* Filtro: Aerolinea */}
         <div className={claseChip(activo(aeroAct))}>
-          <label htmlFor="select-aero" className="text-[11px] font-medium text-slate-500">Aerolínea</label>
+          <label htmlFor="select-aero" className="text-[11px] font-medium text-slate-400">Aerolínea</label>
           <div className="relative">
             <select
               id="select-aero"
@@ -342,7 +386,7 @@ export default function BarraFiltros(props: Props) {
         {hayFiltrosActivos && (
           <button
             onClick={limpiarFiltros}
-            className="text-[11px] font-medium text-slate-500 hover:text-[#FF7A29] transition-colors underline decoration-dotted underline-offset-4"
+            className="text-[11px] font-medium text-slate-400 hover:text-[color:var(--acc2)] transition-colors underline decoration-dotted underline-offset-4"
           >
             Limpiar filtros
           </button>
@@ -351,8 +395,8 @@ export default function BarraFiltros(props: Props) {
 
       {/* Feedback visual de transicion */}
       {isPending && (
-        <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#FF5A00]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#FF5A00] animate-pulse" />
+        <div className="flex items-center justify-center gap-1.5 text-[11px] text-[color:var(--acc)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--acc)] animate-pulse" />
           <span>Filtrando…</span>
         </div>
       )}

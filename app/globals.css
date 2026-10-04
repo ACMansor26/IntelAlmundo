@@ -1,26 +1,75 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   Tokens. Los componentes usan var(--acc), var(--surf)... (no hex fijos) para
+   centralizar la paleta en un solo lugar.
+   ========================================================================== */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b1120;       /* fondo de pagina */
+  --surf: #10182b;     /* superficie de cards */
+  --surf2: #16203a;    /* inicio del degradado de cards */
+  --sunk: #0b1120;     /* zonas hundidas (inputs, notas) */
+  --sunk2: #050810;    /* zonas mas hundidas (chips, tabs) */
+  --acc: #ff5a00;      /* acento de marca */
+  --acc2: #ff7a29;     /* acento claro */
+  --glow: 255 90 0;    /* rgb del resplandor de fondo */
+  --font-heading: var(--font-base), system-ui, sans-serif;
+  --font-data: var(--font-base), system-ui, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-base), system-ui, sans-serif;
+  color: #f1f5f9;
+  background-color: var(--bg);
+  /* Resplandor de marca arriba a la izquierda + un contrapunto frio a la derecha */
+  background-image:
+    radial-gradient(900px 420px at 8% -8%, rgb(var(--glow) / 0.14), transparent 60%),
+    radial-gradient(800px 380px at 100% 0%, rgba(56, 189, 248, 0.06), transparent 55%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Foco visible para navegacion con teclado (WCAG). */
+:focus-visible {
+  outline: 2px solid var(--acc) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 100;
+  background: var(--acc);
+  color: #fff;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 1rem; }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

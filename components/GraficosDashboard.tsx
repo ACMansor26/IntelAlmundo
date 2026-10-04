@@ -6,9 +6,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  LineChart,
-  Line,
-  ComposedChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -22,17 +19,13 @@ import {
   DatosDistribucionGap,
   DatosRegionCompetitividad,
   DatosHeadToHeadRelativo,
-  DatosGraficoAP,
-  DatosVolumenAP,
-  DatosEstadia,
+  DatosComposicionPrecio,
   DatosDiaSemana,
-  DatosShareGanadoresRuta,
-  DatosMarkupDirecto,
-  DatosRanking,
-  DatosDistribucionPosicion,
   DatosFranjaHoraria,
-  DatosGapMonedaRuta,
-  DatosCorrelacionPosicion
+  DatosFeeAerolinea,
+  DatosShareGanadoresRuta,
+  DatosWinFeeRuta,
+  DatosListadoCheckout
 } from '@/lib/data';
 
 interface Props {
@@ -43,22 +36,18 @@ interface Props {
   datosDistribucionGap: DatosDistribucionGap[];
   datosRegionCompetitividad: DatosRegionCompetitividad[];
   datosHeadToHeadRelativo: DatosHeadToHeadRelativo[];
-  datosAP: DatosGraficoAP[];
-  datosVolumenAP: DatosVolumenAP[];
-  datosEstadia: DatosEstadia[];
+  datosComposicion: DatosComposicionPrecio[];
   datosDiaSemana: DatosDiaSemana[];
-  datosShareGanadoresRuta: DatosShareGanadoresRuta[];
-  datosMarkup: DatosMarkupDirecto[];
-  datosRanking: DatosRanking[];
-  datosDistribucionPosicion: DatosDistribucionPosicion[];
   datosFranjaHoraria: DatosFranjaHoraria[];
-  datosGapMoneda: DatosGapMonedaRuta[];
-  datosCorrelacionPosicion: DatosCorrelacionPosicion[];
+  datosFee: DatosFeeAerolinea[];
+  datosShareGanadoresRuta: DatosShareGanadoresRuta[];
+  datosWinFee: DatosWinFeeRuta[];
+  datosListadoCheckout: DatosListadoCheckout[];
 }
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    backgroundColor: '#111C30',
+    backgroundColor: 'var(--surf)',
     borderColor: '#334155',
     borderRadius: '8px',
     fontSize: '12px',
@@ -79,23 +68,26 @@ const TOOLTIP_STYLE = {
   }
 };
 
-const COLOR_ALMUNDO = '#FF5A00';
+const COLOR_ALMUNDO = 'var(--acc)';
 const COLOR_DESPEGAR = '#3B82F6';
-const COLOR_TURISMOCITY = '#A855F7';
 const COLOR_ATRAPALO = '#EC4899';
-const COLOR_DIRECTO = '#10B981';
-const COLOR_ARS = '#FF5A00';
-const COLOR_USD = '#22D3EE';
-const COLOR_MEJOR_PRECIO = '#10B981';
-const COLOR_NO_MEJOR_PRECIO = '#EF4444';
+const COLOR_SIN_FEE = '#10B981';
+const COLOR_CON_FEE = '#F59E0B';
+const COLOR_TARIFA = '#38BDF8';
+const COLOR_IMPUESTOS = '#6366F1';
+const COLOR_TASAS = '#A78BFA';
+const COLOR_FEE = 'var(--acc)';
 
 const COLORES_HISTOGRAMA: Record<string, string> = {
   '0% (Win)': '#10B981',
   '0.1% a 3%': '#0EA5E9',
-  '3.1% a 7%': '#FF5A00',
+  '3.1% a 7%': 'var(--acc)',
   '7.1% a 15%': '#F97316',
   '> 15%': '#EF4444'
 };
+
+const colorVendedor = (v: string) =>
+  v === 'Almundo' ? COLOR_ALMUNDO : v === 'Despegar' ? COLOR_DESPEGAR : v === 'Atrápalo' ? COLOR_ATRAPALO : '#64748b';
 
 export default function GraficosDashboard({
   moneda,
@@ -103,17 +95,13 @@ export default function GraficosDashboard({
   datosDistribucionGap,
   datosRegionCompetitividad,
   datosHeadToHeadRelativo,
-  datosAP,
-  datosVolumenAP,
-  datosEstadia,
+  datosComposicion,
   datosDiaSemana,
-  datosShareGanadoresRuta,
-  datosMarkup,
-  datosRanking,
-  datosDistribucionPosicion,
   datosFranjaHoraria,
-  datosGapMoneda,
-  datosCorrelacionPosicion
+  datosFee,
+  datosShareGanadoresRuta,
+  datosWinFee,
+  datosListadoCheckout
 }: Props) {
   const prefijo = moneda === 'USD' ? 'USD ' : '$ ';
 
@@ -126,19 +114,19 @@ export default function GraficosDashboard({
     return [value, name];
   };
 
+  const formatMonto = (v: any, name: any) => [`${prefijo}${Number(v).toLocaleString('es-AR')}`, name];
+
   const renderLegendText = (value: string) => (
     <span className="text-slate-200 font-medium text-xs ml-1">{value}</span>
   );
 
-  // Consolida los ex-gráficos 5 (Estadía), 6 (Día de Semana) y 10 (Franja
-  // Horaria) en un único chart con selector: los tres responden la misma
-  // pregunta ("¿el gap cambia según el perfil temporal del vuelo?"), solo
-  // cambia el eje de corte -- separarlos en 3 cards distintas era redundante.
-  type VistaTemporal = 'estadia' | 'dia_semana' | 'franja_horaria';
-  const [vistaTemporal, setVistaTemporal] = useState<VistaTemporal>('estadia');
+  // Perfil temporal del vuelo: mismo gap (vs la tarifa mas baja del vuelo) cortado
+  // por dia de salida o por franja horaria. La estadia ya no se muestra: el scraper
+  // hoy solo toma estadia fija de 7 dias, el corte seria un unico punto.
+  type VistaTemporal = 'dia_semana' | 'franja_horaria';
+  const [vistaTemporal, setVistaTemporal] = useState<VistaTemporal>('dia_semana');
 
   const vistasTemporales: { id: VistaTemporal; label: string }[] = [
-    { id: 'estadia', label: 'Duración de Estadía' },
     { id: 'dia_semana', label: 'Día de Salida' },
     { id: 'franja_horaria', label: 'Franja Horaria' }
   ];
@@ -147,7 +135,6 @@ export default function GraficosDashboard({
     VistaTemporal,
     { data: any[]; xKey: string; tickFormatter?: (v: string) => string; labelFormatter?: (label: any, payload: any) => any }
   > = {
-    estadia: { data: datosEstadia, xKey: 'rango_estadia' },
     dia_semana: { data: datosDiaSemana, xKey: 'dia_semana_vuelo', tickFormatter: (d) => d.slice(0, 3) },
     franja_horaria: {
       data: datosFranjaHoraria,
@@ -158,55 +145,50 @@ export default function GraficosDashboard({
   };
 
   const notasVistaTemporal: Record<VistaTemporal, React.ReactNode> = {
-    estadia: (
-      <>
-        <p className="text-slate-300"><strong className="text-[#FF5A00]">Escapadas (1-4d):</strong> Tráfico sensible a horarios y canal directo; requiere paridad estricta para convertir.</p>
-        <p className="text-slate-300"><strong className="text-sky-400">Vacaciones (9-14d+):</strong> El valor agregado (cuotas, equipaje, hoteles) podría tolerar mayor spread; sin datos de conversión, es una hipótesis a confirmar.</p>
-      </>
-    ),
     dia_semana: (
       <>
-        <p className="text-slate-300"><strong className="text-[#FF5A00]">Patrón Semanal:</strong> Diferencia salidas corporativas (martes/miércoles) vs salidas turísticas (viernes/domingo).</p>
-        <p className="text-slate-300"><strong className="text-sky-400">Optimización de Puja:</strong> Activar multiplicadores de CPC en metabuscadores para los días con menor brecha.</p>
+        <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Patrón Semanal:</strong> Diferencia salidas corporativas (martes/miércoles) vs salidas turísticas (viernes/domingo).</p>
+        <p className="text-slate-300"><strong className="text-sky-400">Ojo con la muestra:</strong> Con pocos vuelos por día, una barra puede salir de 1 o 2 lecturas; confirmá el volumen antes de actuar.</p>
       </>
     ),
     franja_horaria: (
       <>
         <p className="text-slate-300"><strong className="text-cyan-400">Menor competencia:</strong> Los horarios menos convenientes (madrugada/noche) suelen tener menos oferta y pueden mostrar gaps distintos a los horarios pico.</p>
-        <p className="text-slate-300"><strong className="text-[#FF7A29]">Puja diferenciada:</strong> Si una franja muestra brecha sistemáticamente peor, conviene revisar el pricing específico de esos horarios.</p>
+        <p className="text-slate-300"><strong className="text-[color:var(--acc2)]">Pricing por horario:</strong> Si una franja muestra brecha sistemáticamente peor, conviene revisar el pricing específico de esos horarios.</p>
       </>
     )
   };
+
+  const muestrasComposicion = datosComposicion.length > 0
+    ? Math.min(...datosComposicion.map((d) => d.muestras))
+    : 0;
 
   return (
     <div className="space-y-12">
 
       {/* ===================================================================== */}
-      {/* BLOQUE I: REVENUE MANAGEMENT & POSICIONAMIENTO REGIONAL               */}
+      {/* BLOQUE I: COMPETITIVIDAD DE PRECIO                                    */}
       {/* ===================================================================== */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-[#FF5A00] animate-pulse"></span>
-              I. Revenue Management & Posicionamiento Regional
+            <h2 className="text-base font-bold text-white tracking-wider uppercase flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-[color:var(--acc)] animate-pulse"></span>
+              I. Competitividad de Precio
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Análisis de posicionamiento tarifario, Buy Box win rate por región y spread vs. {competidor}
+              Distancia a la tarifa más baja, win rate por región y spread vs. {competidor}. Todo sobre precio sin fee del checkout.
             </p>
           </div>
-          <span className="hidden sm:inline-block text-[11px] font-mono bg-[#FF5A00]/15 text-[#FF7A29] border border-[#FF5A00]/40 px-2.5 py-1 rounded-full font-semibold">
-            BUY BOX Y PRICING REGIONAL
-          </span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* 1. Histograma de Gap */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
               <h3 className="text-sm font-semibold text-white">1. Distribución de Brecha (Buy Box Proximity)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Concentración de vuelos según distancia porcentual a la tarifa ganadora</p>
+              <p className="text-[11px] text-slate-400 mt-1">Concentración de vuelos según distancia porcentual a la tarifa más baja del mismo vuelo y fuente</p>
             </div>
 
             <div className="h-56 w-full">
@@ -214,7 +196,7 @@ export default function GraficosDashboard({
                 <BarChart data={datosDistribucionGap} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
                   <XAxis dataKey="rango_gap" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} allowDecimals={false} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
@@ -231,14 +213,14 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-sky-300">Micro-brecha (0.1% a 3%):</strong> Vuelos prioritarios para micro-ajustes de comisión o promociones bancarias.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Buy Box Wins (0%):</strong> Vuelos con precio más bajo de pantalla; hipótesis de mayor probabilidad de conversión, pendiente de validar con datos de CVR.</p>
+              <p className="text-slate-300"><strong className="text-emerald-400">Buy Box Wins (0%):</strong> Almundo tiene el precio sin fee más bajo del vuelo; no incluye filas marcadas &quot;a revisar&quot;.</p>
             </div>
           </div>
 
           {/* 2. Win Rate por Región */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
               <h3 className="text-sm font-semibold text-white">2. Win Rate Almundo por Región</h3>
               <p className="text-[11px] text-slate-400 mt-1">Porcentaje de vuelos ganados y brecha promedio según destino</p>
@@ -273,17 +255,17 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-emerald-400">Lectura de Cartera:</strong> Evalúa el balance entre Cabotaje (paridad sensible) e Internacional (financiación).</p>
               <p className="text-slate-300"><strong className="text-sky-400">Decisión Comercial:</strong> Ajustar markups en regiones con Win Rate &lt; 25% para no penalizar la posición de despliegue.</p>
             </div>
           </div>
 
           {/* 3. Spread H2H Almundo vs Competidor elegido Relativo */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
               <h3 className="text-sm font-semibold text-white">3. Spread H2H vs {competidor} (Relativo %)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Diferencial porcentual de tarifa en vuelos cotizados por ambos operadores</p>
+              <p className="text-[11px] text-slate-400 mt-1">Diferencial porcentual de precio sin fee en vuelos leídos para ambos vendedores en la misma fuente</p>
             </div>
 
             <div className="h-56 w-full">
@@ -305,7 +287,7 @@ export default function GraficosDashboard({
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
                     formatter={(v: any, _, item: any) => [
-                      `${v > 0 ? `+${v}% (${competidor} más barato)` : `${v}% (Almundo más barato)`} [${prefijo}${Math.abs(item.payload.spread_promedio_monto).toLocaleString('es-AR')}]`,
+                      `${v > 0 ? `+${v}% (${competidor} más barato)` : `${v}% (Almundo más barato)`} [${prefijo}${Math.abs(item.payload.spread_promedio_monto).toLocaleString('es-AR')}] · ${item.payload.vuelos_comparados} vuelos`,
                       'Spread Relativo'
                     ]}
                   />
@@ -319,9 +301,9 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-emerald-400">Verde (&le; 0%):</strong> Almundo cotiza igual o más barato, capturando la preferencia del usuario.</p>
-              <p className="text-slate-300"><strong className="text-rose-400">Rojo (&gt; 0%):</strong> {competidor} cotiza con ventaja; riesgo inmediato de fuga de ventas en la góndola.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-emerald-400">Verde (&le; 0%):</strong> Almundo cotiza igual o más barato antes del fee.</p>
+              <p className="text-slate-300"><strong className="text-rose-400">Rojo (&gt; 0%):</strong> {competidor} cotiza con ventaja; riesgo de fuga de ventas en la góndola.</p>
             </div>
           </div>
 
@@ -329,66 +311,68 @@ export default function GraficosDashboard({
       </div>
 
       {/* ===================================================================== */}
-      {/* BLOQUE II: PATRONES DE DEMANDA & COMPORTAMIENTO DEL VIAJERO           */}
+      {/* BLOQUE II: ESTRUCTURA DE PRECIO Y FEE                                 */}
       {/* ===================================================================== */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
+            <h2 className="text-base font-bold text-white tracking-wider uppercase flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-sky-500"></span>
-              II. Patrones de Demanda & Comportamiento del Viajero
+              II. Estructura de Precio & Fee
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Curva de Anticipación (con volumen de respaldo) y perfil temporal del vuelo: estadía, día y franja horaria de salida
+              Cómo se compone el precio de cada vendedor, cuánto cobra de fee y si la brecha cambia según el perfil temporal del vuelo
             </p>
           </div>
-          <span className="hidden sm:inline-block text-[11px] font-mono bg-sky-950/60 text-sky-300 border border-sky-800/80 px-2.5 py-1 rounded-full">
-            VENTANA DE RESERVA Y PERFIL DE VIAJE
-          </span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* 4. Curva de Anticipación */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 4. Composicion del precio */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">4. Curva de Anticipación (Advance Purchase)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Brecha porcentual promedio según días previos a la fecha de vuelo</p>
+              <h3 className="text-sm font-semibold text-white">4. Composición del Precio por Vendedor</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Promedio de tarifa base, impuestos, tasas y fee en vuelos leídos por Almundo y Despegar</p>
             </div>
 
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={datosAP} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <BarChart data={datosComposicion} margin={{ top: 10, right: 10, left: -5, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="dias_anticipacion" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="d" />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
+                  <XAxis dataKey="vendedor" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                  <YAxis
+                    stroke="#64748b"
+                    tick={{ fill: '#cbd5e1', fontSize: 10 }}
+                    tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
+                  />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={formatPctTooltip}
+                    formatter={formatMonto}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Line type="monotone" dataKey="almundo" name="Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
-                  <Line type="monotone" dataKey="competidor" name={competidor} stroke={COLOR_DESPEGAR} strokeWidth={1.5} dot={{ r: 2.5 }} connectNulls />
-                  <Line type="monotone" dataKey="canal_directo" name="Directo" stroke={COLOR_DIRECTO} strokeWidth={1.5} strokeDasharray="3 3" dot={{ r: 2.5 }} connectNulls />
-                </LineChart>
+                  <Bar dataKey="tarifa_base" name="Tarifa base" stackId="p" fill={COLOR_TARIFA} />
+                  <Bar dataKey="impuestos" name="Impuestos" stackId="p" fill={COLOR_IMPUESTOS} />
+                  <Bar dataKey="tasas" name="Tasas" stackId="p" fill={COLOR_TASAS} />
+                  <Bar dataKey="cargo_gestion" name="Fee" stackId="p" fill={COLOR_FEE} radius={[3, 3, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Ventana Óptima:</strong> Identifica los rangos de anticipación donde Almundo lidera con menor spread.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Pauta Publicitaria:</strong> Alinear el bidding agresivo en metabuscadores hacia las ventanas más competitivas.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Dónde se pierde el vuelo:</strong> Si la tarifa base es igual, la diferencia está en impuestos, tasas o fee. En Atrápalo las tasas incluyen el IVA; en Almundo, el IVA del fee.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Muestra:</strong> {muestrasComposicion > 0 ? `${muestrasComposicion} lecturas por vendedor` : 'sin lecturas comparables'}; con pocos datos tomalo como orientativo.</p>
             </div>
           </div>
 
-          {/* 5. Perfil Temporal del Vuelo (selector: Estadía / Día de Salida / Franja Horaria) */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 5. Perfil Temporal del Vuelo (selector: Dia de Salida / Franja Horaria) */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
               <h3 className="text-sm font-semibold text-white">5. Perfil Temporal del Vuelo</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Brecha porcentual promedio según distintos cortes temporales del vuelo</p>
+              <p className="text-[11px] text-slate-400 mt-1">Brecha promedio vs la tarifa más baja, según día o franja horaria de salida</p>
 
-              <nav className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-[#0B1120] p-1 mt-3 w-fit">
+              <nav className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-[color:var(--sunk)] p-1 mt-3 w-fit">
                 {vistasTemporales.map((v) => (
                   <button
                     key={v.id}
@@ -396,8 +380,8 @@ export default function GraficosDashboard({
                     onClick={() => setVistaTemporal(v.id)}
                     className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition ${
                       vistaTemporal === v.id
-                        ? 'bg-[#FF5A00] text-white'
-                        : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                        ? 'bg-[color:var(--acc)] text-white'
+                        : 'text-slate-400 hover:text-slate-300 hover:bg-white/5'
                     }`}
                   >
                     {v.label}
@@ -429,49 +413,46 @@ export default function GraficosDashboard({
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="competidor" name={competidor} fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="canal_directo" name="Directo" fill={COLOR_DIRECTO} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="competidor" name={competidor} fill={colorVendedor(competidor)} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               {notasVistaTemporal[vistaTemporal]}
             </div>
           </div>
 
-          {/* 6. Volumen de Vuelos por Ventana de Anticipación */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 6. Fee por aerolinea y vendedor */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">6. Volumen por Ventana de Anticipación</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Cantidad de vuelos distintos detrás de cada tramo de la Curva de Anticipación</p>
+              <h3 className="text-sm font-semibold text-white">6. Fee por Aerolínea y Vendedor</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Cargo de gestión promedio como % del precio sin fee</p>
             </div>
 
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={datosVolumenAP} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <BarChart data={datosFee} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="rango_ap" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 9 }} />
-                  <YAxis yAxisId="volumen" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis yAxisId="gap" orientation="right" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
+                  <XAxis dataKey="aerolinea" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) =>
-                      name === 'Vuelos en la muestra' ? [v, name] : formatPctTooltip(v, name)
-                    }
+                    formatter={(v: any, name: any) => [v !== null && v !== undefined ? `${v}%` : 'N/D', name]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar yAxisId="volumen" dataKey="total_vuelos" name="Vuelos en la muestra" fill="#334155" radius={[3, 3, 0, 0]} />
-                  <Line yAxisId="gap" type="monotone" dataKey="gap_almundo" name="Gap Almundo" stroke={COLOR_ALMUNDO} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
-                </ComposedChart>
+                  <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="despegar" name="Despegar" fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="atrapalo" name="Atrápalo" fill={COLOR_ATRAPALO} radius={[3, 3, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Lectura conjunta:</strong> Un tramo con buen gap pero pocas barras (poco volumen) es una conclusión débil — conviene esperar más datos antes de accionar pauta sobre esa ventana.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Dónde confiar:</strong> Priorizá para bidding los tramos donde el gap favorable coincide con volumen alto.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Palanca de margen:</strong> Un fee de Almundo mayor al de Despegar en una aerolínea explica brecha de precio total aunque la tarifa sea idéntica.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Barra faltante:</strong> El vendedor no se pudo leer en esa aerolínea; no equivale a fee 0%.</p>
             </div>
           </div>
 
@@ -479,31 +460,28 @@ export default function GraficosDashboard({
       </div>
 
       {/* ===================================================================== */}
-      {/* BLOQUE III: METABUSCADORES, CANAL DIRECTO & GÓNDOLA PUBLICITARIA     */}
+      {/* BLOQUE III: COBERTURA & CALIDAD DEL DATO                              */}
       {/* ===================================================================== */}
       <div>
         <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
+            <h2 className="text-base font-bold text-white tracking-wider uppercase flex items-center gap-2">
               <span className="h-3 w-3 rounded-full bg-emerald-400"></span>
-              III. Performance en Metabuscadores, Canal Directo & Góndola
+              III. Cobertura & Calidad del Dato
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Disponibilidad de inventario en góndola, índice de fuga al canal directo y posición promedio de despliegue en pantalla
+              Qué vendedores se pudieron leer, cuánto cuesta el fee en vuelos ganados y cuánto se desvía el checkout de lo que muestra el metabuscador
             </p>
           </div>
-          <span className="hidden sm:inline-block text-[11px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/80 px-2.5 py-1 rounded-full">
-            CONTROL DE POSICIONAMIENTO Y FUGA DE VENTAS
-          </span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* 6. Cobertura de Inventario (Top 6 Rutas) */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 7. Cobertura de Inventario (Top 6 Rutas) */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">7. Cobertura de Inventario por Ruta</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Porcentaje de búsquedas donde cada operador cuenta con oferta activa (Top Rutas)</p>
+              <h3 className="text-sm font-semibold text-white">7. Cobertura de Vendedores por Ruta</h3>
+              <p className="text-[11px] text-slate-400 mt-1">% de vuelos observados donde se pudo leer el checkout de cada vendedor (Top Rutas)</p>
             </div>
 
             <div className="h-56 w-full">
@@ -521,230 +499,90 @@ export default function GraficosDashboard({
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo_pct" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
                   <Bar dataKey="despegar_pct" name="Despegar" fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="turismocity_pct" name="TurismoCity" fill={COLOR_TURISMOCITY} radius={[3, 3, 0, 0]} />
                   <Bar dataKey="atrapalo_pct" name="Atrápalo" fill={COLOR_ATRAPALO} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Salud del Feed:</strong> Rutas con presencia 0% señalan fallas de integración, blackouts o inventario no conectado.</p>
-              <p className="text-slate-300"><strong className="text-emerald-400">Cobertura:</strong> Asegurar presencia constante frente a Despegar para no ceder tráfico en tramos clave.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Hueco de lectura:</strong> A veces Kayak o Skyscanner bloquean un vendedor. Un vendedor ausente no significa que no venda ese vuelo.</p>
+              <p className="text-slate-300"><strong className="text-emerald-400">Cobertura baja:</strong> Antes de sacar conclusiones de una ruta, confirmá que los tres vendedores se leyeron.</p>
             </div>
           </div>
 
-          {/* 7. Markup vs Canal Directo por Aerolínea (con Atrápalo) */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 8. Win rate con vs sin fee por ruta */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">8. Riesgo de Fuga hacia Canal Directo (Markup %)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Recargo medio de las agencias sobre la tarifa oficial de la aerolínea</p>
+              <h3 className="text-sm font-semibold text-white">8. Win Rate: Sin Fee vs Con Fee</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Vuelos donde Almundo es el más barato antes y después de sumar el fee, por ruta</p>
             </div>
 
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosMarkup} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <BarChart data={datosWinFee} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="aerolinea" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
+                  <XAxis dataKey="ruta" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 9 }} interval={0} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" domain={[0, 100]} />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) => [`+${v}%`, name]}
+                    formatter={(v: any, name: any, item: any) => [`${v}% (${item.payload.vuelos} vuelos)`, name]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="despegar" name="Despegar" fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="turismocity" name="TurismoCity" fill={COLOR_TURISMOCITY} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="atrapalo" name="Atrápalo" fill={COLOR_ATRAPALO} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="win_sin_fee_pct" name="Sin fee" fill={COLOR_SIN_FEE} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="win_con_fee_pct" name="Con fee (precio final)" fill={COLOR_CON_FEE} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Desintermediación:</strong> Markups elevados incrementan el riesgo de fuga hacia el canal directo; el umbral de referencia es un supuesto, no viene de datos propios validados.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Benchmark OTA:</strong> Controlar si Atrápalo o Despegar reducen margen para ganar tracción en el metabuscador.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Costo del fee:</strong> La caída entre la barra verde y la ámbar es la parte del win rate que se pierde por cobrar fee.</p>
+              <p className="text-slate-300"><strong className="text-sky-400">Decisión:</strong> Si el win rate final es muy inferior, evaluar absorber parte del fee en esas rutas.</p>
             </div>
           </div>
 
-          {/* 8. Posición Promedio de Despliegue */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
+          {/* 9. Diferencia checkout vs listado */}
+          <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
-              <h3 className="text-sm font-semibold text-white">9. Posición Promedio de Despliegue</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Ranking medio de visualización en los resultados (#1 = Mayor probabilidad de clic)</p>
+              <h3 className="text-sm font-semibold text-white">9. Checkout vs Listado del Metabuscador</h3>
+              <p className="text-[11px] text-slate-400 mt-1">Desvío promedio del precio final vs lo mostrado, y % de filas a revisar (&gt; 5%), por vendedor y fuente</p>
             </div>
 
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosRanking} layout="vertical" margin={{ top: 10, right: 35, left: 35, bottom: 0 }}>
+                <BarChart data={datosListadoCheckout} margin={{ top: 10, right: 10, left: -15, bottom: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis type="number" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} domain={[1, 'dataMax + 0.5']} />
-                  <YAxis type="category" dataKey="vendedor" stroke="#64748b" tick={{ fill: '#f8fafc', fontSize: 10, fontWeight: 500 }} />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE.contentStyle}
-                    labelStyle={TOOLTIP_STYLE.labelStyle}
-                    itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any) => [`#${Number(v).toFixed(1)}`, 'Posición Media']}
-                  />
-                  <Bar dataKey="ranking_promedio" name="Posición Promedio" radius={[0, 4, 4, 0]}>
-                    {datosRanking.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={
-                          entry.vendedor === 'Almundo' 
-                            ? COLOR_ALMUNDO 
-                            : entry.vendedor === 'Despegar' 
-                            ? COLOR_DESPEGAR 
-                            : entry.vendedor === 'TurismoCity' 
-                            ? COLOR_TURISMOCITY 
-                            : entry.vendedor === 'Atrápalo' 
-                            ? COLOR_ATRAPALO 
-                            : '#64748b'
-                        } 
-                      />
-                    ))}
-                    <LabelList 
-                      dataKey="ranking_promedio" 
-                      position="right" 
-                      fill="#ffffff" 
-                      fontSize={10} 
-                      fontWeight={600} 
-                      formatter={(v: any) => `#${Number(v).toFixed(1)}`} 
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Click Share:</strong> Estar en las 2 primeras posiciones captura más del 80% de los clics salientes.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Visibilidad:</strong> Una posición promedio &gt; #3 reduce drásticamente el CTR aunque el precio sea competitivo.</p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* ===================================================================== */}
-      {/* BLOQUE IV: ANALISIS CAMBIARIO & DIAGNOSTICO DE VISIBILIDAD            */}
-      {/* ===================================================================== */}
-      <div>
-        <div className="border-b border-slate-800 pb-3 mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-wide uppercase flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-cyan-400"></span>
-              IV. Análisis Cambiario & Diagnóstico de Visibilidad
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Paridad ARS/USD en rutas bimonetarias y diagnóstico de visibilidad: distribución y correlación de posición en pantalla
-            </p>
-          </div>
-          <span className="hidden sm:inline-block text-[11px] font-mono bg-cyan-950/60 text-cyan-300 border border-cyan-800/80 px-2.5 py-1 rounded-full">
-            RIESGO CAMBIARIO
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* 9. Gap Almundo: ARS vs USD por ruta bimonetaria */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
-            <div>
-              <h3 className="text-sm font-semibold text-white">10. Paridad Cambiaria (ARS vs USD)</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Brecha promedio de Almundo por moneda, solo en rutas con oferta en ambas</p>
-            </div>
-
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosGapMoneda} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="ruta" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE.contentStyle}
-                    labelStyle={TOOLTIP_STYLE.labelStyle}
-                    itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={formatPctTooltip}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar dataKey="gap_ars" name="ARS" fill={COLOR_ARS} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="gap_usd" name="USD" fill={COLOR_USD} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-cyan-400">Barra faltante:</strong> Si no aparece una de las dos barras, Almundo no tiene oferta en esa moneda para esa ruta — no es un empate a 0%.</p>
-              <p className="text-slate-300"><strong className="text-[#FF7A29]">Hipótesis a validar:</strong> Un gap sistemáticamente peor en USD sugiere un problema de actualización de tipo de cambio o de inventario en dólares, no de precio real.</p>
-            </div>
-          </div>
-
-          {/* 11. Distribución de Posición en Pantalla por Vendedor */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
-            <div>
-              <h3 className="text-sm font-semibold text-white">11. Distribución de Posición en Pantalla</h3>
-              <p className="text-[11px] text-slate-400 mt-1">% de apariciones de cada vendedor en cada rango de posición (no un promedio)</p>
-            </div>
-
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosDistribucionPosicion} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="rango_posicion" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE.contentStyle}
-                    labelStyle={TOOLTIP_STYLE.labelStyle}
-                    itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) => [v !== null && v !== undefined ? `${v}%` : 'N/D', name]}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar dataKey="almundo_pct" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="competidor_pct" name={competidor} fill={COLOR_DESPEGAR} radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-[#FF5A00]">Por qué importa:</strong> Un promedio de #3 puede esconder que la mitad de las veces estás #1 y la otra mitad #6+ — esta vista muestra si el posicionamiento es estable o errático.</p>
-              <p className="text-slate-300"><strong className="text-sky-400">Comparación justa:</strong> Cada barra es % sobre el propio volumen del vendedor, así Almundo y {competidor} son comparables aunque tengan distinta cantidad de cotizaciones.</p>
-            </div>
-          </div>
-
-          {/* 12. Correlación Precio vs Posición en Pantalla */}
-          <div className="bg-[#111C30] border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/20">
-            <div>
-              <h3 className="text-sm font-semibold text-white">12. Precio vs Posición en Pantalla</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Posición promedio de cada vendedor cuando es el más barato vs cuando no lo es</p>
-            </div>
-
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={datosCorrelacionPosicion} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-                  <XAxis dataKey="vendedor" stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                  <YAxis
+                  <XAxis
+                    dataKey="etiqueta"
                     stroke="#64748b"
-                    tick={{ fill: '#cbd5e1', fontSize: 10 }}
-                    reversed
-                    domain={[1, 'dataMax + 0.5']}
-                    tickFormatter={(v: number) => `#${v.toFixed(1)}`}
+                    tick={{ fill: '#cbd5e1', fontSize: 9 }}
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                    height={55}
                   />
+                  <YAxis stroke="#64748b" tick={{ fill: '#cbd5e1', fontSize: 10 }} unit="%" />
                   <Tooltip
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) => [v !== null && v !== undefined ? `#${Number(v).toFixed(1)}` : 'N/D', name]}
+                    formatter={(v: any, name: any, item: any) => [
+                      v !== null && v !== undefined ? `${v}% (${item.payload.filas} filas)` : 'N/D',
+                      name
+                    ]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
-                  <Bar dataKey="posicion_cuando_mejor_precio" name="Cuando es el más barato" fill={COLOR_MEJOR_PRECIO} radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="posicion_cuando_no_mejor_precio" name="Cuando NO es el más barato" fill={COLOR_NO_MEJOR_PRECIO} radius={[3, 3, 0, 0]} />
+                  <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
+                  <Bar dataKey="dif_promedio_pct" name="Desvío promedio" fill="#38BDF8" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="a_revisar_pct" name="Filas a revisar" fill="#EF4444" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-[#0B1120] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
-              <p className="text-slate-300"><strong className="text-emerald-400">Sin diferencia:</strong> Si las dos barras de un vendedor son parecidas, su posición en pantalla no depende del precio — puede haber un acuerdo comercial u otro criterio de ranking.</p>
-              <p className="text-slate-300"><strong className="text-rose-400">Techo de posición:</strong> Barra roja alta pese a precio bajo sugiere que ser el más barato no alcanza para mejorar la visibilidad de Almundo.</p>
+            <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
+              <p className="text-slate-300"><strong className="text-sky-400">Normal ≈ 0%:</strong> El checkout casi siempre cobra lo mismo que muestra el listado.</p>
+              <p className="text-slate-300"><strong className="text-rose-400">Filas a revisar:</strong> Se excluyen de promedios y rankings del dashboard; están filtrables en la Matriz.</p>
             </div>
           </div>
 

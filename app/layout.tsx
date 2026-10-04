@@ -1,7 +1,6 @@
 // app/layout.tsx
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
-import AuthModal from '@/components/AuthModal';
+import { Montserrat } from 'next/font/google';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -9,19 +8,25 @@ export const metadata: Metadata = {
   description: 'Panel de monitoreo competitivo y análisis de tarifas de vuelos.',
 };
 
-export default async function RootLayout({
+// Tipografia unica del sitio: Montserrat. Las variables --font-heading y
+// --font-data (usadas por las paginas) apuntan a ella desde globals.css; las
+// cifras usan tabular-nums para que las columnas alineen.
+const fontBase = Montserrat({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-base'
+});
+
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const isAuthenticated = cookieStore.has('almundo_auth_session');
-
   return (
-    <html lang="es">
-      <body className="bg-[#0B1120] text-slate-100 antialiased font-sans">
-        <AuthModal isAuthenticated={isAuthenticated} />
-        {children}
+    <html lang="es" className={fontBase.variable}>
+      <body className="text-slate-100 antialiased">
+        <a href="#contenido" className="skip-link">Saltar al contenido</a>
+        <div id="contenido">{children}</div>
       </body>
     </html>
   );

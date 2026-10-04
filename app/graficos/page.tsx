@@ -1,7 +1,6 @@
 // app/graficos/page.tsx
 import React from 'react';
 import { Metadata } from 'next';
-import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
 import {
   obtenerDatosDashboard,
   getRutasDisponibles,
@@ -10,11 +9,12 @@ import {
   getRegionesDisponibles,
   getTiposVueloDisponibles,
   getConteosFiltros,
-  getCompetidoresDisponibles
+  getCompetidoresDisponibles,
+  getInfoActualizacion
 } from '@/lib/data';
-import GraficosDashboard from '@/components/GraficosDashboard';
+import GraficosDashboard from '@/components/GraficosDashboardLazy';
 import BarraFiltros from '@/components/BarraFiltros';
-import Link from 'next/link';
+import AppHeader from '@/components/AppHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -26,16 +26,6 @@ export const metadata: Metadata = {
 
 // Misma tipografia que la matriz (app/page.tsx): Space Grotesk para
 // titulos/labels, IBM Plex Mono con tabular-nums para toda cifra.
-const fontTitulo = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-heading'
-});
-const fontDato = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-data'
-});
 const heading = '[font-family:var(--font-heading)]';
 const dato = '[font-family:var(--font-data)] tabular-nums';
 
@@ -55,24 +45,26 @@ export default async function GraficosPage(props: PageProps) {
   // obtenerDatosDashboard, aunque FiltrosDashboard ya lo soporta.
   const tipo_vuelo = (resolvedSearchParams?.tipo_vuelo as string) || 'TODOS';
   const competidor = (resolvedSearchParams?.competidor as string) || 'Despegar';
+  const fecha = (resolvedSearchParams?.fecha as string) || 'ULTIMA';
 
   // Fix: esta pagina no traia las listas dinamicas de filtros — BarraFiltros
   // caia siempre al fallback hardcodeado en vez de los valores reales de la DB.
-  const [rutas, fuentes, aerolineas, regiones, tiposVuelo, competidores, conteosFiltros] = await Promise.all([
+  const [rutas, fuentes, aerolineas, regiones, tiposVuelo, competidores, conteosFiltros, infoActualizacion] = await Promise.all([
     getRutasDisponibles(moneda),
     getFuentesDisponibles(moneda),
     getAerolineasDisponibles(moneda),
     getRegionesDisponibles(moneda, tipo_vuelo),
     getTiposVueloDisponibles(moneda),
     getCompetidoresDisponibles(moneda),
-    getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region })
+    getConteosFiltros({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region, fecha }),
+    getInfoActualizacion()
   ]);
 
   let datos = null;
   let errorMsg: string | null = null;
 
   try {
-    datos = await obtenerDatosDashboard({ moneda, ruta, aerolinea, fuente, region, tipo_vuelo, competidor });
+    datos = await obtenerDatosDashboard({ moneda, ruta, aerolinea, fuente, region, tipo_vuelo, competidor, fecha });
   } catch (err: any) {
     console.error('Error al consultar Neon PostgreSQL:', err);
     errorMsg = 'No se pudo conectar a la base de datos de Neon o aún no hay registros disponibles.';
@@ -82,7 +74,7 @@ export default async function GraficosPage(props: PageProps) {
   // igual que el bug ya corregido en app/page.tsx — se rompe con espacios o
   // caracteres especiales en fuente/aerolinea, y no llevaba tipo_vuelo.
   const buildMatrizUrl = () => {
-    const p = new URLSearchParams({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region, competidor });
+    const p = new URLSearchParams({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region, competidor, fecha });
     return `/?${p.toString()}`;
   };
 
@@ -94,6 +86,8 @@ export default async function GraficosPage(props: PageProps) {
     region,
     tipoVuelo: tipo_vuelo,
     competidor,
+    fecha,
+    fechas: infoActualizacion.fechas,
     rutas,
     fuentes,
     aerolineas,
@@ -109,47 +103,20 @@ export default async function GraficosPage(props: PageProps) {
   // Header unico, calculado antes del branch de error para no duplicar el JSX
   // (antes estaba copiado literal en las dos ramas).
   const header = (
-    <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-white/10 pb-6">
-      <div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-[#FF5A00] opacity-60 animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5A00]" />
-          </span>
-          <span>Panel en vivo de Share of Voice y Revenue Management</span>
-        </div>
-        <h1 className={`${heading} text-2xl md:text-3xl font-semibold tracking-tight text-white mt-1.5`}>
-          Competitive Flight Analytics
-        </h1>
-        <p className="text-slate-400 text-sm mt-1 max-w-2xl">
-          Paridad tarifaria, góndola competitiva y márgenes sobre canales directos, por ruta y aerolínea.
-        </p>
-      </div>
-
-      <nav className="flex items-center gap-5 border-b border-white/10 md:border-0">
-        <Link
-          href={buildMatrizUrl()}
-          className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition"
-        >
-          Matriz Almundo
-        </Link>
-        <span className="relative pb-2 text-xs font-medium text-white">
-          Gráficos & KPIs
-          <span className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-[#FF5A00]" />
-        </span>
-        <Link
-          href="/historial"
-          className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition"
-        >
-          Historial de Búsquedas
-        </Link>
-      </nav>
-    </header>
+    <AppHeader
+      activo="graficos"
+      estado="Panel en vivo de checkout real por vendedor"
+      titulo="Competitive Flight Analytics"
+      subtitulo="Competitividad de precio, estructura del checkout (tarifa, impuestos, tasas y fee) y cobertura de vendedores, por ruta y aerolínea."
+      hrefMatriz={buildMatrizUrl()}
+      hrefGraficos="#"
+      actualizado={infoActualizacion.ultima}
+    />
   );
 
   if (!datos || errorMsg) {
     return (
-      <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
+      <main className={`min-h-screen text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
         {header}
 
         <BarraFiltros {...barraFiltrosProps} />
@@ -178,10 +145,7 @@ export default async function GraficosPage(props: PageProps) {
   // Fix: "Presencia Despegar" quedaba fijo aunque el usuario cambiara el
   // competidor a comparar en la barra de filtros -- ahora toma la columna de
   // qSOV (datosShareGanadoresRuta) que corresponde al competidor elegido.
-  const campoPctCompetidor =
-    competidor === 'TurismoCity' ? 'turismocity_pct' :
-    competidor === 'Atrápalo' ? 'atrapalo_pct' :
-    'despegar_pct';
+  const campoPctCompetidor = competidor === 'Atrápalo' ? 'atrapalo_pct' : 'despegar_pct';
 
   const avgSovCompetidor = totalVuelosSov > 0
     ? Math.round(
@@ -189,13 +153,18 @@ export default async function GraficosPage(props: PageProps) {
       )
     : 0;
 
+  const compAlmundo = datos.datosComposicion.find(c => c.vendedor === 'Almundo');
+  const compCompetidor = datos.datosComposicion.find(c => c.vendedor === competidor);
+  const feeAlmundo = compAlmundo ? compAlmundo.pct_fee : null;
+  const feeCompetidor = compCompetidor ? compCompetidor.pct_fee : null;
+
   // Mismo ticker-strip que la matriz: una sola franja con divisores finos en
   // vez de 4 cards identicas con el mismo shadow/radius.
   const kpiItems = [
     {
       label: 'Vuelos con Almundo',
       value: totalVuelosEnCatalogo.toLocaleString('es-AR'),
-      sub: 'itinerarios con presencia confirmada',
+      sub: 'lecturas de checkout (sin filas a revisar)',
       color: 'text-white'
     },
     {
@@ -205,10 +174,10 @@ export default async function GraficosPage(props: PageProps) {
       color: 'text-emerald-400'
     },
     {
-      label: 'Presencia Media Almundo',
-      value: `${avgSovAlmundo}%`,
-      sub: 'share de góndola, ponderado por volumen',
-      color: 'text-[#FF7A29]'
+      label: 'Fee medio Almundo',
+      value: feeAlmundo !== null ? `${feeAlmundo}%` : 'N/D',
+      sub: feeCompetidor !== null ? `vs ${feeCompetidor}% ${competidor} (sobre precio sin fee)` : 'sobre precio sin fee',
+      color: 'text-[color:var(--acc2)]'
     },
     {
       label: `Presencia ${competidor}`,
@@ -219,23 +188,22 @@ export default async function GraficosPage(props: PageProps) {
   ];
 
   return (
-    <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
+    <main className={`min-h-screen text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
       {header}
 
       {/* Barra de Filtros */}
       <BarraFiltros {...barraFiltrosProps} />
 
       {/* Ticker de KPIs */}
-      <section className="rounded-2xl border border-white/10 bg-[#10182B] overflow-hidden">
-        <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-white/10">
-          {kpiItems.map((item) => (
-            <div key={item.label} className="p-4 md:p-5">
-              <span className="text-[11px] text-slate-500">{item.label}</span>
-              <p className={`${dato} text-2xl font-semibold mt-1.5 ${item.color}`}>{item.value}</p>
-              <span className="text-[10px] text-slate-600 mt-0.5 block">{item.sub}</span>
-            </div>
-          ))}
-        </div>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpiItems.map((item) => (
+          <div key={item.label} className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] p-5">
+            <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[color:var(--acc)] to-[color:var(--acc)]/0" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{item.label}</span>
+            <p className={`${dato} text-3xl font-bold leading-none mt-2.5 ${item.color}`}>{item.value}</p>
+            <span className="text-[10px] text-slate-400 mt-2 block">{item.sub}</span>
+          </div>
+        ))}
       </section>
 
       {/* Grilla 3x3 de Gráficos Analíticos */}
@@ -247,17 +215,13 @@ export default async function GraficosPage(props: PageProps) {
         datosDistribucionGap={datos.datosDistribucionGap}
         datosRegionCompetitividad={datos.datosRegionCompetitividad}
         datosHeadToHeadRelativo={datos.datosHeadToHeadRelativo}
-        datosAP={datos.datosAP}
-        datosVolumenAP={datos.datosVolumenAP}
-        datosEstadia={datos.datosEstadia}
+        datosComposicion={datos.datosComposicion}
         datosDiaSemana={datos.datosDiaSemana}
-        datosShareGanadoresRuta={datos.datosShareGanadoresRuta}
-        datosMarkup={datos.datosMarkup}
-        datosRanking={datos.datosRanking}
-        datosDistribucionPosicion={datos.datosDistribucionPosicion}
         datosFranjaHoraria={datos.datosFranjaHoraria}
-        datosGapMoneda={datos.datosGapMoneda}
-        datosCorrelacionPosicion={datos.datosCorrelacionPosicion}
+        datosFee={datos.datosFee}
+        datosShareGanadoresRuta={datos.datosShareGanadoresRuta}
+        datosWinFee={datos.datosWinFee}
+        datosListadoCheckout={datos.datosListadoCheckout}
       />
     </main>
   );

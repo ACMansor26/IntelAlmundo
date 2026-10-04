@@ -1,9 +1,9 @@
 // app/historial/page.tsx
 import React from 'react';
 import { Metadata } from 'next';
-import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
 import { getHistorialCorridas, getDetalleCorrida, getFechasConCorridas, type CorridaJobDetalle } from '@/lib/data';
 import Link from 'next/link';
+import AppHeader from '@/components/AppHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -13,16 +13,6 @@ export const metadata: Metadata = {
   description: 'Qué se buscó, cuánto tardó y qué encontró cada ronda de búsqueda automática'
 };
 
-const fontTitulo = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-heading'
-});
-const fontDato = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-data'
-});
 const heading = '[font-family:var(--font-heading)]';
 const dato = '[font-family:var(--font-data)] tabular-nums';
 
@@ -87,6 +77,9 @@ export default async function HistorialPage(props: PageProps) {
   // el numero mostrado en cada tab es el que realmente vas a ver si lo
   // clickeas), pero no el filtro de estado -- cada tab cuenta sobre el mismo
   // universo, independiente de cual este seleccionado.
+  // Esquema de checkout: la segunda pasada ya no aplica (queda en 0) -- se oculta
+  // su columna salvo que alguna corrida vieja la haya usado.
+  const hayRevision = detalleCompleto.some((j) => j.reviso_segunda_pasada);
   const detalleBaseConteo = detalleCompleto.filter((j) => !soloRecuperados || j.recupero_almundo_segunda_pasada);
 
   const detalle = detalleBaseConteo.filter((j) => coincideEstado(j, estado));
@@ -112,7 +105,7 @@ export default async function HistorialPage(props: PageProps) {
   // (Almundo = emerald, Despegar = sky, ausencia = rose). "Todos" y el color
   // por defecto de la nav se quedan con el naranja de marca.
   const tabsEstado: { id: EstadoValido; label: string; colorActivo: string }[] = [
-    { id: 'TODOS', label: 'Todos', colorActivo: 'bg-[#FF5A00] text-white' },
+    { id: 'TODOS', label: 'Todos', colorActivo: 'bg-[color:var(--acc)] text-white' },
     { id: 'AMBOS', label: 'Almundo y Despegar', colorActivo: 'bg-gradient-to-r from-emerald-500 to-sky-500 text-white' },
     { id: 'SOLO_ALMUNDO', label: 'Solo Almundo', colorActivo: 'bg-emerald-500 text-white' },
     { id: 'SOLO_DESPEGAR', label: 'Solo Despegar', colorActivo: 'bg-sky-500 text-white' },
@@ -120,36 +113,14 @@ export default async function HistorialPage(props: PageProps) {
   ];
 
   const header = (
-    <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-white/10 pb-6">
-      <div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-[#FF5A00] opacity-60 animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5A00]" />
-          </span>
-          <span>Actividad reciente de las búsquedas automáticas</span>
-        </div>
-        <h1 className={`${heading} text-2xl md:text-3xl font-semibold tracking-tight text-white mt-1.5`}>
-          Historial de Búsquedas
-        </h1>
-        <p className="text-slate-400 text-sm mt-1 max-w-2xl">
-          Qué se buscó, cuánto tardó y qué encontró cada ronda de búsqueda automática.
-        </p>
-      </div>
-
-      <nav className="flex items-center gap-5 border-b border-white/10 md:border-0">
-        <Link href="/" className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition">
-          Matriz Almundo
-        </Link>
-        <Link href="/graficos" className="relative pb-2 text-xs font-medium text-slate-500 hover:text-slate-300 transition">
-          Gráficos & KPIs
-        </Link>
-        <span className="relative pb-2 text-xs font-medium text-white">
-          Historial de Búsquedas
-          <span className="absolute left-0 right-0 -bottom-px h-[2px] rounded-full bg-[#FF5A00]" />
-        </span>
-      </nav>
-    </header>
+    <AppHeader
+      activo="historial"
+      estado="Actividad reciente de las búsquedas automáticas"
+      titulo="Historial de Búsquedas"
+      subtitulo="Qué se buscó, cuánto tardó y qué encontró cada ronda de búsqueda automática."
+      hrefMatriz="/"
+      hrefGraficos="/graficos"
+    />
   );
 
   const filtroFecha = (
@@ -157,7 +128,7 @@ export default async function HistorialPage(props: PageProps) {
       <Link
         href={buildFechaUrl(null)}
         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-          !fechaFiltro ? 'bg-[#FF5A00] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
+          !fechaFiltro ? 'bg-[color:var(--acc)] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
         }`}
       >
         Todos
@@ -168,7 +139,7 @@ export default async function HistorialPage(props: PageProps) {
             key={f}
             href={buildFechaUrl(f)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${dato} ${
-              fechaFiltro === f ? 'bg-[#FF5A00] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
+              fechaFiltro === f ? 'bg-[color:var(--acc)] text-white' : 'bg-white/5 text-slate-400 hover:text-slate-200'
             }`}
           >
             {f}
@@ -180,7 +151,7 @@ export default async function HistorialPage(props: PageProps) {
 
   if (corridas.length === 0) {
     return (
-      <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
+      <main className={`min-h-screen text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
         {header}
         {fechasDisponibles.length > 0 && filtroFecha}
         <div className="bg-rose-950/30 border border-rose-800/50 rounded-2xl p-6 text-center text-rose-300">
@@ -194,16 +165,16 @@ export default async function HistorialPage(props: PageProps) {
   }
 
   return (
-    <main className={`${fontTitulo.variable} ${fontDato.variable} min-h-screen bg-[#080B14] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
+    <main className={`min-h-screen text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8`}>
       {header}
       {filtroFecha}
 
       {/* Tabla de corridas */}
-      <section className="rounded-2xl border border-white/10 bg-[#10182B] overflow-hidden">
+      <section className="rounded-2xl border border-white/10 bg-[color:var(--surf)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] text-slate-500 border-b border-white/10">
+              <tr className="text-left text-[11px] text-slate-400 border-b border-white/10">
                 <th className="p-3 font-medium">Fecha</th>
                 <th className="p-3 font-medium">Buscador</th>
                 <th className="p-3 font-medium">Duración</th>
@@ -222,7 +193,7 @@ export default async function HistorialPage(props: PageProps) {
                 return (
                   <tr
                     key={c.id}
-                    className={`relative cursor-pointer ${activa ? 'bg-[#FF5A00]/10' : 'hover:bg-white/[0.03] transition'}`}
+                    className={`relative cursor-pointer ${activa ? 'bg-[color:var(--acc)]/10' : 'hover:bg-white/[0.03] transition'}`}
                   >
                     <td className="p-3">
                       {/* Link que cubre toda la fila (no solo esta celda) -- position:
@@ -241,7 +212,7 @@ export default async function HistorialPage(props: PageProps) {
                     <td className={`p-3 ${dato} text-xs text-slate-300`}>{formatoSeg(c.duracion_total_seg)}</td>
                     <td className={`p-3 ${dato} text-xs text-slate-300`}>{c.jobs_con_datos}/{c.jobs_totales}</td>
                     <td className={`p-3 ${dato} text-xs`}>
-                      <span className={c.jobs_con_almundo === c.jobs_totales ? 'text-emerald-400' : 'text-[#FF7A29]'}>
+                      <span className={c.jobs_con_almundo === c.jobs_totales ? 'text-emerald-400' : 'text-[color:var(--acc2)]'}>
                         {c.jobs_con_almundo}/{c.jobs_totales}
                       </span>
                     </td>
@@ -253,13 +224,13 @@ export default async function HistorialPage(props: PageProps) {
                           {watchdogTotal} reinicio{watchdogTotal !== 1 ? 's' : ''}
                         </span>
                       ) : (
-                        <span className="text-slate-600">-</span>
+                        <span className="text-slate-400">-</span>
                       )}
                     </td>
                     <td className={`p-3 ${dato} text-xs text-slate-300`}>
                       {c.jobs_segunda_pasada > 0
                         ? `${c.jobs_recuperados_segunda_pasada}/${c.jobs_segunda_pasada} recuperadas`
-                        : <span className="text-slate-600">-</span>}
+                        : <span className="text-slate-400">-</span>}
                     </td>
                   </tr>
                 );
@@ -276,7 +247,7 @@ export default async function HistorialPage(props: PageProps) {
             <h2 className={`${heading} text-lg font-semibold text-white`}>
               Detalle de la búsqueda del {corridaActiva.fecha_inicio}
             </h2>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-slate-400">
               Búsqueda: {formatoSeg(corridaActiva.duracion_scraping_seg)} · Guardado: {formatoSeg(corridaActiva.duracion_db_seg)}
             </span>
           </div>
@@ -299,9 +270,9 @@ export default async function HistorialPage(props: PageProps) {
               nativo (sin JS) para no inflar el peso de una pagina que ya es
               mayormente informativa. Lenguaje llano, sin nombrar mecanismos
               internos (watchdog, requeue, etc.) por su nombre tecnico. */}
-          <details className="rounded-xl border border-white/10 bg-[#10182B] group">
+          <details className="rounded-xl border border-white/10 bg-[color:var(--surf)] group">
             <summary className="cursor-pointer list-none p-3 text-xs font-medium text-slate-300 flex items-center gap-2">
-              <span className="text-slate-500 transition group-open:rotate-90">▸</span>
+              <span className="text-slate-400 transition group-open:rotate-90">▸</span>
               ¿Cómo funciona la recuperación de rutas?
             </summary>
             <div className="px-3 pb-4 pt-1 space-y-3 text-xs text-slate-400 leading-relaxed border-t border-white/5">
@@ -357,8 +328,8 @@ export default async function HistorialPage(props: PageProps) {
               independiente y no como una opcion mas del primer grupo. */}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-slate-600 mb-1.5 px-1">Resultado</p>
-              <nav className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-[#10182B] p-1">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5 px-1">Resultado</p>
+              <nav className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-[color:var(--surf)] p-1">
                 {tabsEstado.map((tab) => {
                   const cantidad = detalleBaseConteo.filter((j) => coincideEstado(j, tab.id)).length;
                   return (
@@ -368,10 +339,10 @@ export default async function HistorialPage(props: PageProps) {
                       className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
                         estado === tab.id
                           ? tab.colorActivo
-                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                          : 'text-slate-400 hover:text-slate-300 hover:bg-white/5'
                       }`}
                     >
-                      {tab.label} <span className={estado === tab.id ? 'text-white/70' : 'text-slate-600'}>· {cantidad}</span>
+                      {tab.label} <span className={estado === tab.id ? 'text-white/70' : 'text-slate-400'}>· {cantidad}</span>
                     </Link>
                   );
                 })}
@@ -379,10 +350,10 @@ export default async function HistorialPage(props: PageProps) {
             </div>
 
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-slate-600 mb-1.5 px-1">Origen</p>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5 px-1">Origen</p>
               <Link
                 href={buildDetalleUrl(estado, !soloRecuperados)}
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-[#10182B] px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-300 transition"
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-[color:var(--surf)] px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-300 transition"
               >
                 {/* Switch (track + knob) en vez de una pill igual a las de arriba
                     -- comunica "flag que se prende/apaga" y no "otra opcion del
@@ -399,33 +370,36 @@ export default async function HistorialPage(props: PageProps) {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[#10182B] overflow-hidden">
+          <div className="rounded-2xl border border-white/10 bg-[color:var(--surf)] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[11px] text-slate-500 border-b border-white/10">
+                  <tr className="text-left text-[11px] text-slate-400 border-b border-white/10">
                     <th className="p-3 font-medium">#</th>
                     <th className="p-3 font-medium">Ruta</th>
+                    <th className="p-3 font-medium">Aerolínea</th>
                     <th className="p-3 font-medium">Moneda</th>
                     <th className="p-3 font-medium">Antelación / Duración viaje</th>
                     <th className="p-3 font-medium">Precios encontrados</th>
                     <th className="p-3 font-medium">Almundo</th>
                     <th className="p-3 font-medium">Despegar</th>
-                    <th className="p-3 font-medium">Segunda revisión</th>
+                    <th className="p-3 font-medium">Atrápalo</th>
+                    {hayRevision && <th className="p-3 font-medium">Segunda revisión</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {detalle.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-6 text-center text-xs text-slate-500">
+                      <td colSpan={hayRevision ? 10 : 9} className="p-6 text-center text-xs text-slate-400">
                         Ninguna ruta de esta búsqueda coincide con el filtro seleccionado.
                       </td>
                     </tr>
                   )}
-                  {detalle.map((j) => (
-                    <tr key={j.idx} className="hover:bg-white/[0.03] transition">
-                      <td className={`p-3 ${dato} text-xs text-slate-500`}>{j.idx}</td>
+                  {detalle.map((j, i) => (
+                    <tr key={`${j.idx}-${j.aerolinea ?? i}`} className="hover:bg-white/[0.03] transition">
+                      <td className={`p-3 ${dato} text-xs text-slate-400`}>{j.idx}</td>
                       <td className="p-3 text-xs text-slate-200 font-medium">{j.ruta}</td>
+                      <td className="p-3 text-xs text-slate-400">{j.aerolinea ?? "-"}</td>
                       <td className="p-3 text-xs text-slate-400">{j.moneda}</td>
                       <td className={`p-3 ${dato} text-xs text-slate-400`}>{j.dias_anticipacion}d / {j.dias_estadia}d</td>
                       <td className={`p-3 ${dato} text-xs text-slate-300`}>{j.ofertas_count}</td>
@@ -437,17 +411,22 @@ export default async function HistorialPage(props: PageProps) {
                       <td className="p-3 text-xs">
                         {j.tiene_despegar
                           ? <span className="text-emerald-400">Sí</span>
-                          : <span className="text-slate-600">No</span>}
+                          : <span className="text-slate-400">No</span>}
                       </td>
                       <td className="p-3 text-xs">
+                        {j.tiene_atrapalo
+                          ? <span className="text-emerald-400">Sí</span>
+                          : <span className="text-slate-400">No</span>}
+                      </td>
+                      {hayRevision && <td className="p-3 text-xs">
                         {j.reviso_segunda_pasada ? (
                           j.recupero_almundo_segunda_pasada
                             ? <span className="text-emerald-400">Recuperado</span>
-                            : <span className="text-slate-500">Sin cambio</span>
+                            : <span className="text-slate-400">Sin cambio</span>
                         ) : (
                           <span className="text-slate-700">-</span>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   ))}
                 </tbody>
