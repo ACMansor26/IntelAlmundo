@@ -7,7 +7,8 @@ import { COOKIE_SESION, tokenValido } from '@/lib/session';
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (pathname === '/login') return NextResponse.next();
+  // /api/salud: lo consulta un monitor externo sin sesion (sin sesion solo devuelve el estado).
+  if (pathname === '/login' || pathname === '/api/salud') return NextResponse.next();
 
   if (await tokenValido(req.cookies.get(COOKIE_SESION)?.value)) {
     return NextResponse.next();

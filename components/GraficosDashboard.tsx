@@ -89,6 +89,60 @@ const COLORES_HISTOGRAMA: Record<string, string> = {
 const colorVendedor = (v: string) =>
   v === 'Almundo' ? COLOR_ALMUNDO : v === 'Despegar' ? COLOR_DESPEGAR : v === 'Atrápalo' ? COLOR_ATRAPALO : '#64748b';
 
+// Alternativa accesible a cada grafico: los mismos datos en una tabla real
+// (lectores de pantalla, teclado, copiar/pegar). Va colapsada para no ocupar
+// espacio a quien ve el grafico.
+interface ColumnaTabla {
+  key: string;
+  label: string;
+  formato?: (v: any, fila: any) => string;
+}
+
+function TablaDatos({ titulo, columnas, filas }: { titulo: string; columnas: ColumnaTabla[]; filas: any[] }) {
+  return (
+    <details className="rounded-lg border border-white/10 bg-[color:var(--sunk)] text-[11px]">
+      <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-300 hover:text-white">
+        Ver datos en tabla
+      </summary>
+      <div className="overflow-x-auto px-3 pb-3">
+        <table className="w-full text-left">
+          <caption className="sr-only">{titulo}</caption>
+          <thead>
+            <tr className="text-slate-400">
+              {columnas.map((c) => (
+                <th key={c.key} scope="col" className="py-1.5 pr-3 font-medium">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5 text-slate-200">
+            {filas.length === 0 && (
+              <tr>
+                <td colSpan={columnas.length} className="py-2 text-slate-400">Sin datos para los filtros seleccionados.</td>
+              </tr>
+            )}
+            {filas.map((f, i) => (
+              <tr key={i}>
+                {columnas.map((c, j) => {
+                  const v = f[c.key];
+                  const txt = c.formato ? c.formato(v, f) : v === null || v === undefined ? 'N/D' : String(v);
+                  return j === 0 ? (
+                    <th key={c.key} scope="row" className="py-1.5 pr-3 font-medium text-white">{txt}</th>
+                  ) : (
+                    <td key={c.key} className="py-1.5 pr-3 tabular-nums">{txt}</td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+const pct = (v: any) => (v === null || v === undefined ? 'N/D' : `${v}%`);
+const num = (v: any) => (v === null || v === undefined ? 'N/D' : Number(v).toLocaleString('es-AR'));
+
 export default function GraficosDashboard({
   moneda,
   competidor,
@@ -191,7 +245,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Concentración de vuelos según distancia porcentual a la tarifa más baja del mismo vuelo y fuente</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="1. Gráfico de barras: cantidad de vuelos de Almundo por rango de distancia a la tarifa más baja. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosDistribucionGap} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -213,6 +267,8 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
+            <TablaDatos titulo="Distribución de brecha" filas={datosDistribucionGap} columnas={[{ key: 'rango_gap', label: 'Rango de brecha' }, { key: 'cantidad_vuelos', label: 'Vuelos', formato: num }, { key: 'share_pct', label: 'Participación', formato: pct }]} />
+
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-sky-300">Micro-brecha (0.1% a 3%):</strong> Vuelos prioritarios para micro-ajustes de comisión o promociones bancarias.</p>
               <p className="text-slate-300"><strong className="text-emerald-400">Buy Box Wins (0%):</strong> Almundo tiene el precio sin fee más bajo del vuelo; no incluye filas marcadas &quot;a revisar&quot;.</p>
@@ -226,7 +282,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Porcentaje de vuelos ganados y brecha promedio según destino</p>
             </div>
 
-            <div className="h-64 w-full">
+            <div className="h-64 w-full" role="img" aria-label="2. Gráfico de barras horizontales: win rate de Almundo por región. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosRegionCompetitividad} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -255,6 +311,8 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
+            <TablaDatos titulo="Win rate de Almundo por región" filas={datosRegionCompetitividad} columnas={[{ key: 'region', label: 'Región' }, { key: 'total_vuelos', label: 'Vuelos', formato: num }, { key: 'win_rate_almundo_pct', label: 'Win rate', formato: pct }, { key: 'gap_promedio_almundo', label: 'Brecha promedio', formato: pct }]} />
+
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-emerald-400">Lectura de Cartera:</strong> Evalúa el balance entre Cabotaje (paridad sensible) e Internacional (financiación).</p>
               <p className="text-slate-300"><strong className="text-sky-400">Decisión Comercial:</strong> Ajustar markups en regiones con Win Rate &lt; 25% para no penalizar la posición de despliegue.</p>
@@ -268,7 +326,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Diferencial porcentual de precio sin fee en vuelos leídos para ambos vendedores en la misma fuente</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="3. Gráfico de barras: diferencia porcentual de precio entre Almundo y el competidor elegido, por ruta. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosHeadToHeadRelativo} margin={{ top: 10, right: 10, left: -15, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -300,6 +358,8 @@ export default function GraficosDashboard({
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <TablaDatos titulo={`Spread de Almundo vs ${competidor} por ruta`} filas={datosHeadToHeadRelativo} columnas={[{ key: 'ruta', label: 'Ruta' }, { key: 'vuelos_comparados', label: 'Vuelos comparados', formato: num }, { key: 'spread_promedio_pct', label: 'Spread', formato: pct }, { key: 'spread_promedio_monto', label: 'Spread en monto', formato: (v) => `${prefijo}${num(v)}` }]} />
 
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-emerald-400">Verde (&le; 0%):</strong> Almundo cotiza igual o más barato antes del fee.</p>
@@ -335,7 +395,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Promedio de tarifa base, impuestos, tasas y fee en vuelos leídos por Almundo y Despegar</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="4. Gráfico de barras apiladas: composición del precio promedio de cada vendedor en tarifa base, impuestos, tasas y fee. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosComposicion} margin={{ top: 10, right: 10, left: -5, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -359,6 +419,8 @@ export default function GraficosDashboard({
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <TablaDatos titulo="Composición del precio por vendedor" filas={datosComposicion} columnas={[{ key: 'vendedor', label: 'Vendedor' }, { key: 'tarifa_base', label: 'Tarifa base', formato: (v) => `${prefijo}${num(v)}` }, { key: 'impuestos', label: 'Impuestos', formato: (v) => `${prefijo}${num(v)}` }, { key: 'tasas', label: 'Tasas', formato: (v) => `${prefijo}${num(v)}` }, { key: 'cargo_gestion', label: 'Fee', formato: (v) => `${prefijo}${num(v)}` }, { key: 'precio_total', label: 'Precio total', formato: (v) => `${prefijo}${num(v)}` }, { key: 'pct_fee', label: 'Fee %', formato: pct }, { key: 'muestras', label: 'Lecturas', formato: num }]} />
 
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Dónde se pierde el vuelo:</strong> Si la tarifa base es igual, la diferencia está en impuestos, tasas o fee. En Atrápalo las tasas incluyen el IVA; en Almundo, el IVA del fee.</p>
@@ -390,7 +452,7 @@ export default function GraficosDashboard({
               </nav>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="5. Gráfico de barras: brecha promedio de Almundo y del competidor según el día de salida o la franja horaria elegidos. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={configVistaTemporal[vistaTemporal].data}
@@ -418,6 +480,8 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
+            <TablaDatos titulo={`Brecha promedio por ${vistaTemporal === 'dia_semana' ? 'día de salida' : 'franja horaria'}`} filas={configVistaTemporal[vistaTemporal].data} columnas={[{ key: configVistaTemporal[vistaTemporal].xKey, label: vistaTemporal === 'dia_semana' ? 'Día' : 'Franja', formato: (v, f) => (f.rango_horas ? `${v} (${f.rango_horas})` : String(v)) }, { key: 'almundo', label: 'Almundo', formato: pct }, { key: 'competidor', label: competidor, formato: pct }]} />
+
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               {notasVistaTemporal[vistaTemporal]}
             </div>
@@ -430,7 +494,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Cargo de gestión promedio como % del precio sin fee</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="6. Gráfico de barras: fee promedio como porcentaje del precio sin fee, por aerolínea y vendedor. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosFee} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -449,6 +513,8 @@ export default function GraficosDashboard({
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <TablaDatos titulo="Fee por aerolínea y vendedor" filas={datosFee} columnas={[{ key: 'aerolinea', label: 'Aerolínea' }, { key: 'almundo', label: 'Almundo', formato: pct }, { key: 'despegar', label: 'Despegar', formato: pct }, { key: 'atrapalo', label: 'Atrápalo', formato: pct }]} />
 
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Palanca de margen:</strong> Un fee de Almundo mayor al de Despegar en una aerolínea explica brecha de precio total aunque la tarifa sea idéntica.</p>
@@ -484,7 +550,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">% de vuelos observados donde se pudo leer el checkout de cada vendedor (Top Rutas)</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="7. Gráfico de barras: porcentaje de vuelos en que se pudo leer el checkout de cada vendedor, por ruta. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosShareGanadoresRuta} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -504,6 +570,8 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
+            <TablaDatos titulo="Cobertura de vendedores por ruta" filas={datosShareGanadoresRuta} columnas={[{ key: 'ruta', label: 'Ruta' }, { key: 'total_vuelos', label: 'Vuelos', formato: num }, { key: 'almundo_pct', label: 'Almundo', formato: pct }, { key: 'despegar_pct', label: 'Despegar', formato: pct }, { key: 'atrapalo_pct', label: 'Atrápalo', formato: pct }]} />
+
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Hueco de lectura:</strong> A veces Kayak o Skyscanner bloquean un vendedor. Un vendedor ausente no significa que no venda ese vuelo.</p>
               <p className="text-slate-300"><strong className="text-emerald-400">Cobertura baja:</strong> Antes de sacar conclusiones de una ruta, confirmá que los tres vendedores se leyeron.</p>
@@ -517,7 +585,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Vuelos donde Almundo es el más barato antes y después de sumar el fee, por ruta</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="8. Gráfico de barras: win rate de Almundo por ruta, antes y después de sumar el fee. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosWinFee} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -536,6 +604,8 @@ export default function GraficosDashboard({
               </ResponsiveContainer>
             </div>
 
+            <TablaDatos titulo="Win rate sin fee vs con fee por ruta" filas={datosWinFee} columnas={[{ key: 'ruta', label: 'Ruta' }, { key: 'vuelos', label: 'Vuelos', formato: num }, { key: 'win_sin_fee_pct', label: 'Win rate sin fee', formato: pct }, { key: 'win_con_fee_pct', label: 'Win rate con fee', formato: pct }]} />
+
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Costo del fee:</strong> La caída entre la barra verde y la ámbar es la parte del win rate que se pierde por cobrar fee.</p>
               <p className="text-slate-300"><strong className="text-sky-400">Decisión:</strong> Si el win rate final es muy inferior, evaluar absorber parte del fee en esas rutas.</p>
@@ -549,7 +619,7 @@ export default function GraficosDashboard({
               <p className="text-[11px] text-slate-400 mt-1">Desvío promedio del precio final vs lo mostrado, y % de filas a revisar (&gt; 5%), por vendedor y fuente</p>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-56 w-full" role="img" aria-label="9. Gráfico de barras: desvío promedio del precio de checkout respecto al listado y porcentaje de filas a revisar, por vendedor y fuente. Los mismos datos están en la tabla de abajo.">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={datosListadoCheckout} margin={{ top: 10, right: 10, left: -15, bottom: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -579,6 +649,8 @@ export default function GraficosDashboard({
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <TablaDatos titulo="Checkout vs listado del metabuscador" filas={datosListadoCheckout} columnas={[{ key: 'etiqueta', label: 'Vendedor · fuente' }, { key: 'filas', label: 'Filas', formato: num }, { key: 'dif_promedio_pct', label: 'Desvío promedio', formato: pct }, { key: 'a_revisar_pct', label: 'Filas a revisar', formato: pct }]} />
 
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-sky-400">Normal ≈ 0%:</strong> El checkout casi siempre cobra lo mismo que muestra el listado.</p>

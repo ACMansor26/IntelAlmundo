@@ -34,3 +34,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Pruebas y monitoreo
+
+- `npm test` — corre `tests/`:
+  - `esquema.test.ts`: contrato con la base real (solo lectura). Falla con el nombre de la columna si el scraper cambia el esquema.
+  - `queries.test.ts`: ejecuta las consultas de `lib/data.ts` contra datos de ejemplo en un esquema temporal de Neon (`test_dash_*`, se borra al terminar). Necesita `DATABASE_URL` (se lee de `.env.local`).
+- `GET /api/salud` — para un monitor externo (UptimeRobot, etc.): 200 si todo está bien, 503 si la base no responde, cambió el esquema o no hay lecturas nuevas en `SALUD_MAX_HORAS_SIN_DATOS` horas (default 36). Sin sesión devuelve solo el estado; con sesión, el detalle.
+- Acceso: `DASHBOARD_PASSWORD` es obligatoria (sin ella nadie puede entrar); `DASHBOARD_USER` es opcional; `AUTH_SECRET` opcional (si falta, la sesión se firma con la contraseña).
