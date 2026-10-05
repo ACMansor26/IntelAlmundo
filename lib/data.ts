@@ -113,7 +113,7 @@ export interface ItinerarioAlmundo {
   spread_competidor_pct: number | null;
   spread_competidor_monto: number | null;
   a_revisar: boolean;
-  estado_almundo: 'WIN' | 'OPORTUNIDAD' | 'MODERADO' | 'DESALINEADO' | 'SIN_OFERTA';
+  estado_almundo: 'WIN' | 'OPORTUNIDAD' | 'MODERADO' | 'DESALINEADO' | 'SIN_OFERTA' | 'SIN_COMPARACION';
 }
 
 export interface ResultadoPaginadoItinerarios {
@@ -279,24 +279,38 @@ function exprAerolineaPrincipal(): string {
 //  - min_sin_fee / min_total: menor precio entre los vendedores leidos para el
 //    MISMO vuelo y la MISMA fuente (el mismo id_pareja_vuelo aparece una vez
 //    por fuente, mezclarlas compararia lecturas distintas).
+//  - n_validos: cantidad de vendedores validos (no "a revisar") del mismo vuelo y fuente.
 //  - gap_min_pct / gap_min_monto: brecha de la fila vs ese minimo, sobre
-//    precio_sin_fee (el fee es un cargo del vendedor, no del vuelo).
-//  - es_ultima_corrida: la fila pertenece al dia de datos mas reciente de SU
-//    fuente (filtro por defecto del dashboard: no mezclar dias distintos).
+//    precio_sin_fee (el fee es un cargo del vendedor, no del vuelo). Solo se calcula
+//    con n_validos >= MIN_VENDEDORES_COMPARACION; si no, queda NULL.
+//  - es_ultima_corrida: la fila pertenece al dia de datos mas reciente de TODAS las
+//    fuentes (filtro por defecto: una sola fecha de referencia, para no mezclar en la
+//    misma pantalla vuelos leidos en dias distintos). Una fuente sin datos ese dia
+//    queda fuera y se avisa en pantalla (getInfoActualizacion.fuentesAtrasadas).
+//  - es_ultima_fuente: lo mismo pero por fuente; se usa cuando el filtro de fuente
+//    esta puesto, asi elegir una fuente atrasada muestra SU ultimo dia.
 // Todas las queries leen de esta subquery (alias pv) en vez de la tabla cruda.
 const UMBRAL_A_REVISAR_PCT = 5;
+// Un vuelo solo se puede comparar (win / gap) si se leyeron al menos 2 vendedores
+// validos (no "a revisar"): con uno solo, el minimo del grupo es el propio vendedor
+// y saldria como "win" con brecha 0 solo porque falto leer al resto (bloqueo, falla).
+const MIN_VENDEDORES_COMPARACION = 2;
 const VISTA_PRECIOS = `(
   SELECT v.*,
-    (v.precio_sin_fee - v.min_sin_fee) AS gap_min_monto,
-    (v.precio_sin_fee - v.min_sin_fee) * 100.0 / NULLIF(v.min_sin_fee, 0) AS gap_min_pct
+    CASE WHEN v.n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN (v.precio_sin_fee - v.min_sin_fee) END AS gap_min_monto,
+    CASE WHEN v.n_validos >= ${MIN_VENDEDORES_COMPARACION}
+         THEN (v.precio_sin_fee - v.min_sin_fee) * 100.0 / NULLIF(v.min_sin_fee, 0) END AS gap_min_pct
   FROM (
     SELECT p.*,
       (ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) > ${UMBRAL_A_REVISAR_PCT}) AS a_revisar,
-      (p.fecha_obtencion::date = MAX(p.fecha_obtencion::date) OVER (PARTITION BY p.fuente)) AS es_ultima_corrida,
+      (p.fecha_obtencion::date = MAX(p.fecha_obtencion::date) OVER ()) AS es_ultima_corrida,
+      (p.fecha_obtencion::date = MAX(p.fecha_obtencion::date) OVER (PARTITION BY p.fuente)) AS es_ultima_fuente,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_sin_fee END)
         OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS min_sin_fee,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_total END)
-        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS min_total
+        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS min_total,
+      COUNT(*) FILTER (WHERE ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT})
+        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS n_validos
     FROM precios_vuelos p
   ) v
 ) pv`;
@@ -317,7 +331,7 @@ function clausulaFecha(f: FiltrosDashboard, whereClauses: string[], params: any[
     whereClauses.push(`fecha_obtencion::date = $${params.length}::date`);
     return;
   }
-  whereClauses.push('es_ultima_corrida');
+  whereClauses.push(f.fuente && f.fuente !== 'TODAS' ? 'es_ultima_fuente' : 'es_ultima_corrida');
 }
 
 function normalizarFiltros(
@@ -434,7 +448,7 @@ async function getResumenKPIs_sinCache(
     const q = await client.query(
       `
       WITH grupos AS (
-        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS mejor_precio
+        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS mejor_precio, COUNT(*) AS n_validos
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql} AND NOT a_revisar
         GROUP BY id_pareja_vuelo, fuente
@@ -458,8 +472,10 @@ async function getResumenKPIs_sinCache(
         COUNT(*) AS total_vuelos_unicos,
         COUNT(a.precio_almundo) AS vuelos_con_almundo,
         COUNT(d.id_pareja_vuelo) AS vuelos_con_despegar,
-        COUNT(CASE WHEN a.precio_almundo IS NOT NULL AND a.precio_almundo <= g.mejor_precio THEN 1 END) AS victorias_almundo,
-        ROUND(AVG(CASE WHEN a.precio_almundo IS NOT NULL AND g.mejor_precio > 0
+        COUNT(CASE WHEN a.precio_almundo IS NOT NULL AND g.n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN 1 END) AS almundo_comparables,
+        COUNT(CASE WHEN a.precio_almundo IS NOT NULL AND g.n_validos >= ${MIN_VENDEDORES_COMPARACION}
+                    AND a.precio_almundo <= g.mejor_precio THEN 1 END) AS victorias_almundo,
+        ROUND(AVG(CASE WHEN a.precio_almundo IS NOT NULL AND g.mejor_precio > 0 AND g.n_validos >= ${MIN_VENDEDORES_COMPARACION}
                   THEN ((a.precio_almundo - g.mejor_precio) / g.mejor_precio) * 100 END), 1) AS gap_promedio_almundo_pct,
         ROUND(AVG(g.mejor_precio)) AS mejor_precio_promedio,
         ROUND(AVG(a.pct_fee), 1) AS fee_promedio_almundo_pct,
@@ -476,6 +492,7 @@ async function getResumenKPIs_sinCache(
     const conAlmundo = Number(r.vuelos_con_almundo || 0);
     const conDespegar = Number(r.vuelos_con_despegar || 0);
     const victoriasAlmundo = Number(r.victorias_almundo || 0);
+    const comparablesAlmundo = Number(r.almundo_comparables || 0);
 
     return {
       total_vuelos_unicos: totalUnicos,
@@ -484,7 +501,7 @@ async function getResumenKPIs_sinCache(
       vuelos_con_despegar: conDespegar,
       share_presencia_almundo_pct: totalUnicos > 0 ? Number(((conAlmundo * 100) / totalUnicos).toFixed(1)) : 0,
       share_presencia_despegar_pct: totalUnicos > 0 ? Number(((conDespegar * 100) / totalUnicos).toFixed(1)) : 0,
-      win_rate_almundo_pct: conAlmundo > 0 ? Number(((victoriasAlmundo * 100) / conAlmundo).toFixed(1)) : 0,
+      win_rate_almundo_pct: comparablesAlmundo > 0 ? Number(((victoriasAlmundo * 100) / comparablesAlmundo).toFixed(1)) : 0,
       gap_promedio_almundo_pct: Number(r.gap_promedio_almundo_pct || 0),
       mejor_precio_promedio: r.mejor_precio_promedio !== null && r.mejor_precio_promedio !== undefined ? Number(r.mejor_precio_promedio) : null,
       fee_promedio_almundo_pct: r.fee_promedio_almundo_pct !== null && r.fee_promedio_almundo_pct !== undefined ? Number(r.fee_promedio_almundo_pct) : null,
@@ -568,7 +585,8 @@ async function getTablaItinerariosAlmundo_sinCache(
           MAX(hora_salida_vuelta) AS hora_salida_vuelta,
           MAX(dias_anticipacion) AS dias_anticipacion,
           MAX(dias_estadia) AS dias_estadia,
-          COALESCE(MIN(precio_sin_fee) FILTER (WHERE NOT a_revisar), MIN(precio_sin_fee)) AS mejor_precio_mercado
+          COALESCE(MIN(precio_sin_fee) FILTER (WHERE NOT a_revisar), MIN(precio_sin_fee)) AS mejor_precio_mercado,
+          COUNT(*) FILTER (WHERE NOT a_revisar) AS n_validos
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql}
         GROUP BY id_pareja_vuelo, fuente
@@ -613,11 +631,11 @@ async function getTablaItinerariosAlmundo_sinCache(
           comp.precio_competidor,
           COALESCE(g.vendedor_ganador, 'Desconocido') AS vendedor_ganador,
           CASE
-            WHEN a.precio_almundo IS NOT NULL THEN (a.precio_almundo - b.mejor_precio_mercado)
+            WHEN a.precio_almundo IS NOT NULL AND (b.n_validos >= ${MIN_VENDEDORES_COMPARACION} OR (COALESCE(a.almundo_a_revisar, FALSE) AND b.n_validos >= 1)) THEN (a.precio_almundo - b.mejor_precio_mercado)
             ELSE NULL
           END AS gap_min_monto,
           CASE
-            WHEN a.precio_almundo IS NOT NULL AND b.mejor_precio_mercado > 0
+            WHEN a.precio_almundo IS NOT NULL AND b.mejor_precio_mercado > 0 AND (b.n_validos >= ${MIN_VENDEDORES_COMPARACION} OR (COALESCE(a.almundo_a_revisar, FALSE) AND b.n_validos >= 1))
               THEN ROUND(((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) * 100, 1)
             ELSE NULL
           END AS gap_min_pct,
@@ -634,6 +652,7 @@ async function getTablaItinerariosAlmundo_sinCache(
           CASE
             WHEN a.precio_almundo IS NULL THEN 'SIN_OFERTA'
             WHEN b.mejor_precio_mercado <= 0 THEN 'SIN_OFERTA'
+            WHEN NOT (b.n_validos >= ${MIN_VENDEDORES_COMPARACION} OR (COALESCE(a.almundo_a_revisar, FALSE) AND b.n_validos >= 1)) THEN 'SIN_COMPARACION'
             WHEN (a.precio_almundo - b.mejor_precio_mercado) <= 0 THEN 'WIN'
             WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.03 THEN 'OPORTUNIDAD'
             WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.07 THEN 'MODERADO'
@@ -676,7 +695,7 @@ async function getTablaItinerariosAlmundo_sinCache(
         `
         SELECT id_pareja_vuelo, fuente, vendedor, tarifa_base, impuestos, tasas, cargo_gestion,
                pct_fee, precio_sin_fee, precio_total, precio_listado_vendedor,
-               dif_checkout_vs_listado, pct_dif_checkout_vs_listado, a_revisar, min_sin_fee
+               dif_checkout_vs_listado, pct_dif_checkout_vs_listado, a_revisar, min_sin_fee, n_validos
         FROM ${VISTA_PRECIOS}
         WHERE (id_pareja_vuelo, fuente) IN (SELECT unnest($1::text[]), unnest($2::text[]))
         ORDER BY CASE vendedor WHEN 'Almundo' THEN 1 WHEN 'Despegar' THEN 2 WHEN 'Atrápalo' THEN 3 ELSE 4 END, vendedor
@@ -699,7 +718,8 @@ async function getTablaItinerariosAlmundo_sinCache(
           dif_checkout_vs_listado: num(d.dif_checkout_vs_listado),
           pct_dif_checkout_vs_listado: num(d.pct_dif_checkout_vs_listado),
           a_revisar: Boolean(d.a_revisar),
-          es_mas_barato: !d.a_revisar && d.min_sin_fee !== null && Number(d.precio_sin_fee) <= Number(d.min_sin_fee)
+          es_mas_barato: !d.a_revisar && Number(d.n_validos) >= MIN_VENDEDORES_COMPARACION && d.min_sin_fee !== null
+            && Number(d.precio_sin_fee) <= Number(d.min_sin_fee)
         });
         detallePorClave.set(clave, lista);
       }
@@ -796,7 +816,8 @@ async function getConteosSegmento_sinCache(
       `
       WITH base_vuelos AS (
         SELECT id_pareja_vuelo, fuente,
-          COALESCE(MIN(precio_sin_fee) FILTER (WHERE NOT a_revisar), MIN(precio_sin_fee)) AS mejor_precio_mercado
+          COALESCE(MIN(precio_sin_fee) FILTER (WHERE NOT a_revisar), MIN(precio_sin_fee)) AS mejor_precio_mercado,
+          COUNT(*) FILTER (WHERE NOT a_revisar) AS n_validos
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql}
         GROUP BY id_pareja_vuelo, fuente
@@ -821,6 +842,7 @@ async function getConteosSegmento_sinCache(
           CASE
             WHEN a.precio_almundo IS NULL THEN 'SIN_OFERTA'
             WHEN b.mejor_precio_mercado <= 0 THEN 'SIN_OFERTA'
+            WHEN NOT (b.n_validos >= ${MIN_VENDEDORES_COMPARACION} OR (COALESCE(a.almundo_a_revisar, FALSE) AND b.n_validos >= 1)) THEN 'SIN_COMPARACION'
             WHEN (a.precio_almundo - b.mejor_precio_mercado) <= 0 THEN 'WIN'
             WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.03 THEN 'OPORTUNIDAD'
             WHEN ((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) <= 0.07 THEN 'MODERADO'
@@ -988,8 +1010,10 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
       SELECT
         region,
         COUNT(DISTINCT ${K}) AS total_vuelos,
-        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND NOT a_revisar AND precio_sin_fee <= min_sin_fee THEN ${K} END) * 100.0 /
-              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND NOT a_revisar THEN ${K} END), 0), 1) AS win_rate_almundo_pct,
+        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND NOT a_revisar AND n_validos >= ${MIN_VENDEDORES_COMPARACION}
+                                   AND precio_sin_fee <= min_sin_fee THEN ${K} END) * 100.0 /
+              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND NOT a_revisar AND n_validos >= ${MIN_VENDEDORES_COMPARACION}
+                                          THEN ${K} END), 0), 1) AS win_rate_almundo_pct,
         ROUND(AVG(CASE WHEN vendedor = 'Almundo' AND NOT a_revisar THEN gap_min_pct END), 1) AS gap_promedio_almundo
       FROM ${V}
       WHERE ${whereSql} AND region IS NOT NULL AND region != ''
@@ -1159,15 +1183,17 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
       `
       SELECT
         ruta,
-        COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' THEN ${K} END) AS vuelos,
-        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND precio_sin_fee <= min_sin_fee THEN ${K} END) * 100.0 /
-              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' THEN ${K} END), 0), 1) AS win_sin_fee_pct,
-        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND precio_total <= min_total THEN ${K} END) * 100.0 /
-              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' THEN ${K} END), 0), 1) AS win_con_fee_pct
+        COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN ${K} END) AS vuelos,
+        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION}
+                                   AND precio_sin_fee <= min_sin_fee THEN ${K} END) * 100.0 /
+              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN ${K} END), 0), 1) AS win_sin_fee_pct,
+        ROUND(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION}
+                                   AND precio_total <= min_total THEN ${K} END) * 100.0 /
+              NULLIF(COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN ${K} END), 0), 1) AS win_con_fee_pct
       FROM ${V}
       WHERE ${whereSql} AND NOT a_revisar
       GROUP BY ruta
-      HAVING COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' THEN ${K} END) > 0
+      HAVING COUNT(DISTINCT CASE WHEN vendedor = 'Almundo' AND n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN ${K} END) > 0
       ORDER BY vuelos DESC
       LIMIT 8;
       `,
@@ -1566,17 +1592,26 @@ export async function getConteosFiltros(...args: Parameters<typeof getConteosFil
 export interface InfoActualizacion {
   ultima: string | null;          // 'dd/mm HH:MM' de la lectura mas reciente
   fechas: string[];               // dias con datos, mas reciente primero (YYYY-MM-DD)
+  // Fuentes cuyo ultimo dato es de un dia anterior al mas reciente: no entran en
+  // "Ultima ejecucion" (ultima = 'dd/mm' de su ultimo dato).
+  fuentesAtrasadas: { fuente: string; ultima: string }[];
 }
 
 async function getInfoActualizacion_raw(): Promise<InfoActualizacion> {
   try {
-    const [u, f] = await Promise.all([
+    const [u, f, fu] = await Promise.all([
       pool.query(`SELECT TO_CHAR(MAX(fecha_obtencion), 'DD/MM HH24:MI') AS ultima FROM precios_vuelos`),
-      pool.query(`SELECT DISTINCT TO_CHAR(fecha_obtencion::date, 'YYYY-MM-DD') AS fecha FROM precios_vuelos ORDER BY fecha DESC LIMIT 30`)
+      pool.query(`SELECT DISTINCT TO_CHAR(fecha_obtencion::date, 'YYYY-MM-DD') AS fecha FROM precios_vuelos ORDER BY fecha DESC LIMIT 30`),
+      pool.query(`SELECT fuente, MAX(fecha_obtencion::date) AS dia, TO_CHAR(MAX(fecha_obtencion::date), 'DD/MM') AS ultima
+                  FROM precios_vuelos GROUP BY fuente ORDER BY fuente`)
     ]);
-    return { ultima: u.rows[0]?.ultima ?? null, fechas: f.rows.map(r => r.fecha) };
+    const diaMax = fu.rows.reduce((m: number, r) => Math.max(m, new Date(r.dia).getTime()), 0);
+    const fuentesAtrasadas = fu.rows
+      .filter(r => new Date(r.dia).getTime() < diaMax)
+      .map(r => ({ fuente: r.fuente as string, ultima: r.ultima as string }));
+    return { ultima: u.rows[0]?.ultima ?? null, fechas: f.rows.map(r => r.fecha), fuentesAtrasadas };
   } catch {
-    return { ultima: null, fechas: [] };
+    return { ultima: null, fechas: [], fuentesAtrasadas: [] };
   }
 }
 

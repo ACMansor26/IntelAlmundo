@@ -203,7 +203,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     OPORTUNIDAD: { rail: '#38bdf8', dot: 'bg-sky-400', text: 'text-sky-300', label: 'Oportunidad' },
     MODERADO: { rail: '#fbbf24', dot: 'bg-amber-400', text: 'text-amber-300', label: 'Brecha media' },
     DESALINEADO: { rail: '#fb7185', dot: 'bg-rose-400', text: 'text-rose-300', label: 'Desalineado' },
-    SIN_OFERTA: { rail: '#475569', dot: 'bg-slate-600', text: 'text-slate-400', label: 'Sin cobertura' }
+    SIN_OFERTA: { rail: '#475569', dot: 'bg-slate-600', text: 'text-slate-400', label: 'Sin cobertura' },
+    SIN_COMPARACION: { rail: '#64748b', dot: 'bg-slate-500', text: 'text-slate-400', label: 'Sin comparación' }
   };
 
   // Color por tab alineado al mismo codigo que ya usa el resto del dashboard
@@ -248,6 +249,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           competidores={competidores}
           fecha={fecha}
           fechas={infoActualizacion.fechas}
+          fuentesAtrasadas={infoActualizacion.fuentesAtrasadas}
           conteoRutas={conteosFiltros.porRuta}
           conteoRegiones={conteosFiltros.porRegion}
           conteoAerolineas={conteosFiltros.porAerolinea}

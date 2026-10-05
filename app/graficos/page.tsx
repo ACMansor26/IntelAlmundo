@@ -88,6 +88,7 @@ export default async function GraficosPage(props: PageProps) {
     competidor,
     fecha,
     fechas: infoActualizacion.fechas,
+    fuentesAtrasadas: infoActualizacion.fuentesAtrasadas,
     rutas,
     fuentes,
     aerolineas,

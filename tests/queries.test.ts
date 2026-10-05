@@ -37,6 +37,7 @@ function fila(o: Fila): Fila {
 }
 
 const ID = (n: string) => `AEP-COR_2026-10-17-${n}_2026-10-24-0800_AP15D_7D_ARS`;
+const IDU = (n: string) => `AEP-COR_2026-10-17-${n}_2026-10-24-0800_AP15D_7D_USD`;
 
 // F1 (Kayak, JetSmart): Almundo 1000 (+100 fee) vs Despegar 900 vs Atrapalo 950 -> brecha 11,11% (7.1%-15%)
 // F2 (Kayak, AR): Almundo 800 = Despegar 800 -> gana. Sin Atrapalo.
@@ -54,7 +55,15 @@ const FILAS: Fila[] = [
   fila({ id_pareja_vuelo: ID('1800'), fuente: 'TurismoCity', aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR300', hora_salida_ida: '18:00', vendedor: 'Almundo', precio_sin_fee: 1000, cargo_gestion: 30, pct_fee: 3, pct_dif_checkout_vs_listado: 12, dif_checkout_vs_listado: 120 }),
   fila({ id_pareja_vuelo: ID('1800'), fuente: 'TurismoCity', aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR300', hora_salida_ida: '18:00', vendedor: 'Despegar', precio_sin_fee: 900 }),
   fila({ id_pareja_vuelo: ID('0500'), vendedor: 'Almundo', precio_sin_fee: 700, fecha_obtencion: '2026-10-02 10:00:00' }),
-  fila({ id_pareja_vuelo: ID('0500'), vendedor: 'Despegar', precio_sin_fee: 700, fecha_obtencion: '2026-10-02 10:00:00' })
+  fila({ id_pareja_vuelo: ID('0500'), vendedor: 'Despegar', precio_sin_fee: 700, fecha_obtencion: '2026-10-02 10:00:00' }),
+  // Moneda USD, aparte de los casos ARS: U1 solo tiene a Almundo (no hay con quien comparar),
+  // U2 tiene a Almundo 500 vs Despegar 400 (brecha 25%).
+  fila({ id_pareja_vuelo: IDU('0900'), moneda: 'USD', hora_salida_ida: '09:00', vendedor: 'Almundo', precio_sin_fee: 500 }),
+  fila({ id_pareja_vuelo: IDU('1000'), moneda: 'USD', hora_salida_ida: '10:00', vendedor: 'Almundo', precio_sin_fee: 500 }),
+  fila({ id_pareja_vuelo: IDU('1000'), moneda: 'USD', hora_salida_ida: '10:00', vendedor: 'Despegar', precio_sin_fee: 400 }),
+  // Skyscanner con datos solo del 02/10 (una fuente atrasada respecto del resto, que llega al 03/10).
+  fila({ id_pareja_vuelo: IDU('1100'), fuente: 'Skyscanner', moneda: 'USD', hora_salida_ida: '11:00', vendedor: 'Almundo', precio_sin_fee: 600, fecha_obtencion: '2026-10-02 09:00:00' }),
+  fila({ id_pareja_vuelo: IDU('1100'), fuente: 'Skyscanner', moneda: 'USD', hora_salida_ida: '11:00', vendedor: 'Despegar', precio_sin_fee: 600, fecha_obtencion: '2026-10-02 09:00:00' })
 ];
 
 describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
@@ -175,6 +184,40 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(f1.vendedores.map((v) => v.vendedor)).toEqual(['Almundo', 'Despegar', 'Atrápalo']);
     expect(f1.vendedores.find((v) => v.vendedor === 'Despegar')?.es_mas_barato).toBe(true);
     expect(f1.spread_competidor_monto).toBe(100);
+  });
+
+  it('un vuelo con un solo vendedor valido no cuenta como win ni como brecha', async () => {
+    const usd = { moneda: 'USD' };
+    const k = await data.getResumenKPIs(usd);
+    expect(k.total_vuelos_unicos).toBe(2);
+    expect(k.vuelos_con_almundo).toBe(2);
+    expect(k.win_rate_almundo_pct).toBe(0); // solo U2 es comparable y Almundo no gana
+    expect(k.gap_promedio_almundo_pct).toBe(25);
+
+    const t = await data.getTablaItinerariosAlmundo(usd, 'TODAS', 'TODAS', 'TODAS', 'TODOS', 'TODAS', 'TODOS', 1, 50, 'Despegar');
+    const solo = t.itinerarios.find((i) => i.hora_salida_ida === '09:00')!;
+    expect(solo.estado_almundo).toBe('SIN_COMPARACION');
+    expect(solo.gap_min_pct).toBeNull();
+    expect(solo.vendedores[0].es_mas_barato).toBe(false);
+    const comp = t.itinerarios.find((i) => i.hora_salida_ida === '10:00')!;
+    expect(comp.estado_almundo).toBe('DESALINEADO');
+    expect(comp.gap_min_pct).toBe(25);
+
+    const d = await data.obtenerDatosDashboard(usd);
+    expect(d.datosDistribucionGap.find((r) => r.rango_gap === '0% (Win)')?.cantidad_vuelos).toBe(0);
+    expect(d.datosRegionCompetitividad[0].win_rate_almundo_pct).toBe(0);
+    expect(d.datosWinFee[0].vuelos).toBe(1);
+  });
+
+  it('"Última ejecución" usa una sola fecha para todas las fuentes y avisa de las atrasadas', async () => {
+    const usd = { moneda: 'USD' };
+    // Skyscanner solo tiene datos del 02/10: no entra en la ultima ejecucion global...
+    expect((await data.getResumenKPIs({ ...usd, fecha: 'ULTIMA' })).total_vuelos_unicos).toBe(2);
+    // ...pero si se la elige como fuente, se ve SU ultimo dia
+    expect((await data.getResumenKPIs({ ...usd, fuente: 'Skyscanner', fecha: 'ULTIMA' })).total_vuelos_unicos).toBe(1);
+    expect((await data.getResumenKPIs({ ...usd, fecha: 'TODAS' })).total_vuelos_unicos).toBe(3);
+    const info = await data.getInfoActualizacion();
+    expect(info.fuentesAtrasadas).toEqual([{ fuente: 'Skyscanner', ultima: '02/10' }]);
   });
 
   it('segmentos y conteos de la matriz', async () => {

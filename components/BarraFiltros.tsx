@@ -21,6 +21,8 @@ interface Props {
   // Corrida de datos: 'ULTIMA' (default), 'TODAS' o 'YYYY-MM-DD'
   fecha?: string;
   fechas?: string[];
+  // Fuentes sin datos en la ultima ejecucion (ultimo dato mas viejo): se avisa debajo de los filtros.
+  fuentesAtrasadas?: { fuente: string; ultima: string }[];
 
   // Listas dinamicas opcionales
   rutas?: string[];
@@ -392,6 +394,14 @@ export default function BarraFiltros(props: Props) {
           </button>
         )}
       </div>
+
+      {/* Fuentes sin datos en la ultima ejecucion: solo con "Última ejecución" y todas las fuentes */}
+      {fechaAct === 'ULTIMA' && fuenteAct === 'TODAS' && (props.fuentesAtrasadas ?? []).length > 0 && (
+        <p role="status" className="text-center text-[11px] text-amber-300/90">
+          Sin datos en la última ejecución de {(props.fuentesAtrasadas ?? []).map((x) => `${x.fuente} (último dato ${x.ultima})`).join(', ')}.
+          Elegí esa fuente o un día puntual para verla.
+        </p>
+      )}
 
       {/* Feedback visual de transicion */}
       {isPending && (
