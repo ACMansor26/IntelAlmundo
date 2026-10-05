@@ -298,6 +298,12 @@ const UMBRAL_A_REVISAR_PCT = 5;
 // validos (no "a revisar"): con uno solo, el minimo del grupo es el propio vendedor
 // y saldria como "win" con brecha 0 solo porque falto leer al resto (bloqueo, falla).
 const MIN_VENDEDORES_COMPARACION = 2;
+// Particion de las funciones de ventana: un vuelo observado en una fuente y un dia.
+// moneda, ruta, region y tipo_vuelo se agregan SOLO para que Postgres pueda empujar
+// esos filtros dentro de la vista (solo empuja filtros sobre columnas que estan en la
+// particion); no cambian los grupos porque dependen del id_pareja_vuelo. Asi las
+// consultas con filtro de moneda/ruta no calculan las ventanas sobre toda la tabla.
+const PARTICION_VUELO = 'p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date, p.moneda, p.ruta, p.region, p.tipo_vuelo';
 const VISTA_PRECIOS = `(
   SELECT v.*,
     CASE WHEN v.n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN (v.precio_sin_fee - v.min_sin_fee) END AS gap_min_monto,
@@ -306,14 +312,14 @@ const VISTA_PRECIOS = `(
   FROM (
     SELECT p.*,
       (ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) > ${UMBRAL_A_REVISAR_PCT}) AS a_revisar,
-      (p.fecha_obtencion::date = MAX(p.fecha_obtencion::date) OVER ()) AS es_ultima_corrida,
-      (p.fecha_obtencion::date = MAX(p.fecha_obtencion::date) OVER (PARTITION BY p.fuente)) AS es_ultima_fuente,
+      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x)) AS es_ultima_corrida,
+      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE x.fuente = p.fuente)) AS es_ultima_fuente,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_sin_fee END)
-        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS min_sin_fee,
+        OVER (PARTITION BY ${PARTICION_VUELO}) AS min_sin_fee,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_total END)
-        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS min_total,
+        OVER (PARTITION BY ${PARTICION_VUELO}) AS min_total,
       COUNT(*) FILTER (WHERE ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT})
-        OVER (PARTITION BY p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date) AS n_validos
+        OVER (PARTITION BY ${PARTICION_VUELO}) AS n_validos
     FROM precios_vuelos p
   ) v
 ) pv`;
