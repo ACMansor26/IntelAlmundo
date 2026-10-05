@@ -305,10 +305,10 @@ export default async function HistorialPage(props: PageProps) {
               <div className="rounded-lg bg-white/[0.03] p-3">
                 <p className="text-slate-300 font-medium">¿Por qué hace falta este resguardo?</p>
                 <p className="mt-1">
-                  Que una ruta salga "sin Almundo" en la primera pasada no siempre significa que Almundo
+                  Que una ruta salga &quot;sin Almundo&quot; en la primera pasada no siempre significa que Almundo
                   realmente no tenía oferta ahí: a veces la página tardó un poco más de lo normal en
                   terminar de cargar, o el precio estaba en una opción de vuelo más abajo de las primeras
-                  revisadas. Sin un segundo intento, esos casos quedarían mal contados como "ausencia real"
+                  revisadas. Sin un segundo intento, esos casos quedarían mal contados como &quot;ausencia real&quot;
                   cuando en realidad fueron un problema pasajero de carga — un falso negativo. La segunda
                   revisión, al darle más tiempo y revisar más opciones, permite confirmar cuáles ausencias
                   son genuinas y cuáles eran solo demoras: si aparece Almundo en la segunda vuelta, era un

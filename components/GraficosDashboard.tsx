@@ -92,13 +92,23 @@ const colorVendedor = (v: string) =>
 // Alternativa accesible a cada grafico: los mismos datos en una tabla real
 // (lectores de pantalla, teclado, copiar/pegar). Va colapsada para no ocupar
 // espacio a quien ve el grafico.
+type FilaDatos = Record<string, unknown>;
+// Lo unico que se usa del item que recharts pasa a los formatter de tooltip.
+type ItemGrafico = { payload?: Record<string, unknown> };
+// rango_horas del primer punto del tooltip de la franja horaria (payload de recharts: array de items).
+const rangoDeHoras = (payload: unknown): string | null => {
+  const primero = Array.isArray(payload) ? (payload[0] as ItemGrafico | undefined) : undefined;
+  const r = primero?.payload?.rango_horas;
+  return typeof r === 'string' ? r : null;
+};
+
 interface ColumnaTabla {
   key: string;
   label: string;
-  formato?: (v: any, fila: any) => string;
+  formato?: (v: unknown, fila: FilaDatos) => string;
 }
 
-function TablaDatos({ titulo, columnas, filas }: { titulo: string; columnas: ColumnaTabla[]; filas: any[] }) {
+function TablaDatos({ titulo, columnas, filas }: { titulo: string; columnas: ColumnaTabla[]; filas: object[] }) {
   return (
     <details className="rounded-lg border border-white/10 bg-[color:var(--sunk)] text-[11px]">
       <summary className="cursor-pointer select-none px-3 py-2 font-medium text-slate-300 hover:text-white">
@@ -120,7 +130,7 @@ function TablaDatos({ titulo, columnas, filas }: { titulo: string; columnas: Col
                 <td colSpan={columnas.length} className="py-2 text-slate-400">Sin datos para los filtros seleccionados.</td>
               </tr>
             )}
-            {filas.map((f, i) => (
+            {(filas as FilaDatos[]).map((f, i) => (
               <tr key={i}>
                 {columnas.map((c, j) => {
                   const v = f[c.key];
@@ -140,8 +150,8 @@ function TablaDatos({ titulo, columnas, filas }: { titulo: string; columnas: Col
   );
 }
 
-const pct = (v: any) => (v === null || v === undefined ? 'N/D' : `${v}%`);
-const num = (v: any) => (v === null || v === undefined ? 'N/D' : Number(v).toLocaleString('es-AR'));
+const pct = (v: unknown) => (v === null || v === undefined ? 'N/D' : `${v}%`);
+const num = (v: unknown) => (v === null || v === undefined ? 'N/D' : Number(v).toLocaleString('es-AR'));
 
 export default function GraficosDashboard({
   moneda,
@@ -159,16 +169,16 @@ export default function GraficosDashboard({
 }: Props) {
   const prefijo = moneda === 'USD' ? 'USD ' : '$ ';
 
-  const formatPctTooltip = (value: any, name: any) => {
-    if (value === null || value === undefined) return ['N/D', name];
+  const formatPctTooltip = (value: unknown, name: string | number | undefined): [string, string | number] => {
+    if (value === null || value === undefined) return ['N/D', name ?? ''];
     if (typeof value === 'number') {
       const signo = value > 0 ? '+' : '';
-      return [`${signo}${value}%`, name];
+      return [`${signo}${value}%`, name ?? ''];
     }
-    return [value, name];
+    return [String(value), name ?? ''];
   };
 
-  const formatMonto = (v: any, name: any) => [`${prefijo}${Number(v).toLocaleString('es-AR')}`, name];
+  const formatMonto = (v: unknown, name: string | number | undefined) => [`${prefijo}${Number(v).toLocaleString('es-AR')}`, name ?? ''];
 
   const renderLegendText = (value: string) => (
     <span className="text-slate-200 font-medium text-xs ml-1">{value}</span>
@@ -187,14 +197,14 @@ export default function GraficosDashboard({
 
   const configVistaTemporal: Record<
     VistaTemporal,
-    { data: any[]; xKey: string; tickFormatter?: (v: string) => string; labelFormatter?: (label: any, payload: any) => any }
+    { data: object[]; xKey: string; tickFormatter?: (v: string) => string; labelFormatter?: (label: unknown, payload: unknown) => string }
   > = {
     dia_semana: { data: datosDiaSemana, xKey: 'dia_semana_vuelo', tickFormatter: (d) => d.slice(0, 3) },
     franja_horaria: {
       data: datosFranjaHoraria,
       xKey: 'franja_horaria',
       labelFormatter: (label, payload) =>
-        payload?.[0]?.payload?.rango_horas ? `${label} (${payload[0].payload.rango_horas})` : label
+        rangoDeHoras(payload) ? `${label} (${rangoDeHoras(payload)})` : String(label)
     }
   };
 
@@ -255,13 +265,13 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, _, item: any) => [`${v} vuelos (${item.payload.share_pct}%)`, 'Volumen']}
+                    formatter={(v: unknown, _, item: ItemGrafico) => [`${v} vuelos (${item.payload?.share_pct}%)`, 'Volumen']}
                   />
                   <Bar dataKey="cantidad_vuelos" name="Vuelos" radius={[4, 4, 0, 0]}>
                     {datosDistribucionGap.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORES_HISTOGRAMA[entry.rango_gap] || COLOR_ALMUNDO} />
                     ))}
-                    <LabelList dataKey="share_pct" position="top" fill="#cbd5e1" fontSize={10} formatter={(v: any) => `${v}%`} />
+                    <LabelList dataKey="share_pct" position="top" fill="#cbd5e1" fontSize={10} formatter={(v: unknown) => `${v}%`} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -299,13 +309,13 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any, item: any) => [
-                      `${v}% (${item.payload.total_vuelos} vuelos / Gap: +${item.payload.gap_promedio_almundo || 0}%)`,
+                    formatter={(v: unknown, name: string | number | undefined, item: ItemGrafico) => [
+                      `${v}% (${item.payload?.total_vuelos} vuelos / Gap: +${item.payload?.gap_promedio_almundo || 0}%)`,
                       'Win Rate'
                     ]}
                   />
                   <Bar dataKey="win_rate_almundo_pct" name="Win Rate Almundo" fill="#10B981" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="win_rate_almundo_pct" position="right" fill="#ffffff" fontSize={10} formatter={(v: any) => `${v}%`} />
+                    <LabelList dataKey="win_rate_almundo_pct" position="right" fill="#ffffff" fontSize={10} formatter={(v: unknown) => `${v}%`} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -344,8 +354,8 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, _, item: any) => [
-                      `${v > 0 ? `+${v}% (${competidor} más barato)` : `${v}% (Almundo más barato)`} [${prefijo}${Math.abs(item.payload.spread_promedio_monto).toLocaleString('es-AR')}] · ${item.payload.vuelos_comparados} vuelos`,
+                    formatter={(v: unknown, _, item: ItemGrafico) => [
+                      `${Number(v) > 0 ? `+${v}% (${competidor} más barato)` : `${v}% (Almundo más barato)`} [${prefijo}${Math.abs(Number(item.payload?.spread_promedio_monto)).toLocaleString('es-AR')}] · ${item.payload?.vuelos_comparados} vuelos`,
                       'Spread Relativo'
                     ]}
                   />
@@ -504,7 +514,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) => [v !== null && v !== undefined ? `${v}%` : 'N/D', name]}
+                    formatter={(v: unknown, name: string | number | undefined) => [v !== null && v !== undefined ? `${v}%` : 'N/D', name ?? '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
@@ -560,7 +570,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any) => [`${v}% de vuelos`, name]}
+                    formatter={(v: unknown, name: string | number | undefined) => [`${v}% de vuelos`, name ?? '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="almundo_pct" name="Almundo" fill={COLOR_ALMUNDO} radius={[3, 3, 0, 0]} />
@@ -595,7 +605,7 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any, item: any) => [`${v}% (${item.payload.vuelos} vuelos)`, name]}
+                    formatter={(v: unknown, name: string | number | undefined, item: ItemGrafico) => [`${v}% (${item.payload?.vuelos} vuelos)`, name ?? '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={renderLegendText} />
                   <Bar dataKey="win_sin_fee_pct" name="Sin fee" fill={COLOR_SIN_FEE} radius={[3, 3, 0, 0]} />
@@ -637,8 +647,8 @@ export default function GraficosDashboard({
                     contentStyle={TOOLTIP_STYLE.contentStyle}
                     labelStyle={TOOLTIP_STYLE.labelStyle}
                     itemStyle={TOOLTIP_STYLE.itemStyle}
-                    formatter={(v: any, name: any, item: any) => [
-                      v !== null && v !== undefined ? `${v}% (${item.payload.filas} filas)` : 'N/D',
+                    formatter={(v: unknown, name: string | number | undefined, item: ItemGrafico) => [
+                      v !== null && v !== undefined ? `${v}% (${item.payload?.filas} filas)` : 'N/D',
                       name
                     ]}
                   />

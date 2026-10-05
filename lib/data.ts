@@ -20,6 +20,9 @@ const pool = new Pool({
 // ==============================================================================
 // 2. INTERFACES Y MODELOS DE DATOS
 // ==============================================================================
+// Valores que viajan como parametros bindeados ($N) a las consultas.
+type ParamSql = string | number | boolean | string[] | null;
+
 export interface FiltrosDashboard {
   moneda: string;
   ruta?: string;
@@ -323,7 +326,7 @@ const CLAVE_VUELO = `(id_pareja_vuelo || '|' || fuente)`;
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
 // Agrega al WHERE el corte por corrida segun f.fecha (ver FiltrosDashboard).
-function clausulaFecha(f: FiltrosDashboard, whereClauses: string[], params: any[]) {
+function clausulaFecha(f: FiltrosDashboard, whereClauses: string[], params: ParamSql[]) {
   const fecha = f.fecha || 'ULTIMA';
   if (fecha === 'TODAS') return;
   if (RE_FECHA.test(fecha)) {
@@ -341,7 +344,7 @@ function normalizarFiltros(
   aerolinea: string = 'TODAS',
   tipo_vuelo: string = 'TODOS',
   region: string = 'TODAS'
-): { whereSql: string; params: any[]; filtros: FiltrosDashboard } {
+): { whereSql: string; params: ParamSql[]; filtros: FiltrosDashboard } {
   let f: FiltrosDashboard;
   if (typeof monedaOrFiltros === 'object' && monedaOrFiltros !== null) {
     f = monedaOrFiltros;
@@ -357,7 +360,7 @@ function normalizarFiltros(
   }
 
   const whereClauses: string[] = ['moneda = $1'];
-  const params: any[] = [f.moneda];
+  const params: ParamSql[] = [f.moneda];
 
   if (f.ruta && f.ruta !== 'TODAS') {
     params.push(f.ruta);
@@ -388,34 +391,6 @@ function normalizarFiltros(
 // TODOS los filtros salvo moneda (si no, el filtro de moneda de la pagina
 // -que siempre es ARS o USD, nunca "ambas"- haria imposible comparar las
 // dos monedas en el mismo grafico).
-function construirWhereSinMoneda(f: FiltrosDashboard): { whereSql: string; params: any[] } {
-  const whereClauses: string[] = ['1=1'];
-  const params: any[] = [];
-
-  if (f.ruta && f.ruta !== 'TODAS') {
-    params.push(f.ruta);
-    whereClauses.push(`ruta = $${params.length}`);
-  }
-  if (f.fuente && f.fuente !== 'TODAS') {
-    params.push(f.fuente);
-    whereClauses.push(`fuente = $${params.length}`);
-  }
-  if (f.aerolinea && f.aerolinea !== 'TODAS') {
-    params.push(f.aerolinea);
-    whereClauses.push(`${exprAerolineaPrincipal()} = $${params.length}`);
-  }
-  if (f.tipo_vuelo && f.tipo_vuelo !== 'TODOS') {
-    params.push(f.tipo_vuelo);
-    whereClauses.push(`tipo_vuelo = $${params.length}`);
-  }
-  if (f.region && f.region !== 'TODAS') {
-    params.push(f.region);
-    whereClauses.push(`region = $${params.length}`);
-  }
-
-  return { whereSql: whereClauses.join(' AND '), params };
-}
-
 // ==============================================================================
 // 3b. ALLOWLIST DE SEGMENTOS (fix #1)
 // ==============================================================================
@@ -684,7 +659,7 @@ async function getTablaItinerariosAlmundo_sinCache(
 
     const totalRegistros = q.rows.length > 0 ? Number(q.rows[0].total_count) : 0;
     const totalPaginas = Math.ceil(totalRegistros / limit) || 1;
-    const num = (v: any) => (v !== null && v !== undefined ? Number(v) : null);
+    const num = (v: unknown) => (v !== null && v !== undefined ? Number(v) : null);
 
     // Desglose por vendedor de los vuelos de ESTA pagina (una sola query extra).
     const detallePorClave = new Map<string, DetalleVendedor[]>();
@@ -958,7 +933,7 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
 
   const V = VISTA_PRECIOS;
   const K = CLAVE_VUELO;
-  const num = (v: any) => (v !== null && v !== undefined ? Number(v) : null);
+  const num = (v: unknown) => (v !== null && v !== undefined ? Number(v) : null);
 
   try {
     // Las consultas se lanzan todas juntas (cada una con su propia conexion del
@@ -1315,7 +1290,7 @@ const COMPETIDORES_FALLBACK = ['Despegar', 'Atrápalo'];
 async function getCompetidoresDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
     const whereClauses = [`vendedor != 'Almundo'`, `tipo_vendedor != 'AEROLINEA'`];
-    const params: any[] = [];
+    const params: ParamSql[] = [];
     if (moneda && moneda !== 'TODAS') {
       params.push(moneda);
       whereClauses.push(`moneda = $${params.length}`);
@@ -1382,7 +1357,7 @@ async function getRutasDisponibles_raw(moneda?: string): Promise<string[]> {
 async function getRegionesDisponibles_raw(moneda?: string, tipo_vuelo?: string): Promise<string[]> {
   try {
     const clauses: string[] = [];
-    const params: any[] = [];
+    const params: ParamSql[] = [];
     if (moneda && moneda !== 'TODAS') {
       params.push(moneda);
       clauses.push(`moneda = $${params.length}`);

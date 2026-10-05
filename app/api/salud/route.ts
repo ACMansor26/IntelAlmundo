@@ -52,9 +52,9 @@ export async function GET(req: NextRequest) {
         problemas.push(`última lectura hace ${Math.round(horas)} h (umbral ${MAX_HORAS_SIN_DATOS} h)`);
       }
     }
-  } catch (err: any) {
+  } catch (err) {
     estado = 'error';
-    problemas.push(`base de datos no disponible: ${err?.message ?? 'error desconocido'}`);
+    problemas.push(`base de datos no disponible: ${err instanceof Error ? err.message : 'error desconocido'}`);
   } finally {
     await pool.end().catch(() => {});
   }

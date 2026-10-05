@@ -312,7 +312,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             {errorConsulta ? (
               <div role="alert" className="rounded-xl border border-rose-800/60 bg-rose-950/40 py-8 px-4 text-center text-rose-300 text-xs">
                 <p className="font-semibold text-sm">{errorConsulta}</p>
-                <p className="mt-1 text-rose-400">Esto no es "sin resultados": la consulta falló.</p>
+                <p className="mt-1 text-rose-400">Esto no es &quot;sin resultados&quot;: la consulta falló.</p>
               </div>
             ) : itinerarios.length === 0 ? (
               <div className="py-8 text-center text-slate-400 text-xs">

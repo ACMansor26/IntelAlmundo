@@ -7,12 +7,12 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { cargarEntorno, crearPoolAdmin, urlConSchema } from './helpers/entorno';
 
 // unstable_cache solo existe dentro del runtime de Next: aca se ejecuta directo.
-vi.mock('next/cache', () => ({ unstable_cache: (fn: any) => fn }));
+vi.mock('next/cache', () => ({ unstable_cache: <T>(fn: T) => fn }));
 
 const url = cargarEntorno();
 const SCHEMA = `test_dash_${Date.now()}`;
 
-type Fila = Record<string, any>;
+type Fila = Record<string, unknown>;
 
 // Fila base de precios_vuelos (todas las columnas que el dashboard lee).
 function fila(o: Fila): Fila {
@@ -31,8 +31,8 @@ function fila(o: Fila): Fila {
     fecha_obtencion: '2026-10-03 10:00:00',
     ...o,
     // derivados coherentes con el desglose del checkout
-    precio_total: o.precio_total ?? o.precio_sin_fee + (o.cargo_gestion ?? 0),
-    precio_listado_vendedor: o.precio_listado_vendedor ?? o.precio_sin_fee + (o.cargo_gestion ?? 0)
+    precio_total: o.precio_total ?? Number(o.precio_sin_fee) + Number(o.cargo_gestion ?? 0),
+    precio_listado_vendedor: o.precio_listado_vendedor ?? Number(o.precio_sin_fee) + Number(o.cargo_gestion ?? 0)
   };
 }
 

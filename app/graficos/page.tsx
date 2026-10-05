@@ -26,7 +26,6 @@ export const metadata: Metadata = {
 
 // Misma tipografia que la matriz (app/page.tsx): Space Grotesk para
 // titulos/labels, IBM Plex Mono con tabular-nums para toda cifra.
-const heading = '[font-family:var(--font-heading)]';
 const dato = '[font-family:var(--font-data)] tabular-nums';
 
 type PageProps = {
@@ -65,7 +64,7 @@ export default async function GraficosPage(props: PageProps) {
 
   try {
     datos = await obtenerDatosDashboard({ moneda, ruta, aerolinea, fuente, region, tipo_vuelo, competidor, fecha });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error al consultar Neon PostgreSQL:', err);
     errorMsg = 'No se pudo conectar a la base de datos de Neon o aún no hay registros disponibles.';
   }
@@ -133,20 +132,13 @@ export default async function GraficosPage(props: PageProps) {
   const totalVuelosEnCatalogo = datos.datosDistribucionGap.reduce((acc, curr) => acc + curr.cantidad_vuelos, 0);
   const winRateAlmundo = datos.datosDistribucionGap.find(d => d.rango_gap === '0% (Win)')?.share_pct || 0;
 
-  // Fix: promedio ponderado por total_vuelos en vez de promedio simple entre
-  // rutas — antes una ruta con 5 vuelos pesaba igual que una con 500.
-  const totalVuelosSov = datos.datosShareGanadoresRuta.reduce((acc, curr) => acc + curr.total_vuelos, 0);
-
-  const avgSovAlmundo = totalVuelosSov > 0
-    ? Math.round(
-        datos.datosShareGanadoresRuta.reduce((acc, curr) => acc + curr.almundo_pct * curr.total_vuelos, 0) / totalVuelosSov
-      )
-    : 0;
 
   // Fix: "Presencia Despegar" quedaba fijo aunque el usuario cambiara el
   // competidor a comparar en la barra de filtros -- ahora toma la columna de
   // qSOV (datosShareGanadoresRuta) que corresponde al competidor elegido.
   const campoPctCompetidor = competidor === 'Atrápalo' ? 'atrapalo_pct' : 'despegar_pct';
+  // Promedio ponderado por total_vuelos (una ruta con 5 vuelos no pesa igual que una con 500).
+  const totalVuelosSov = datos.datosShareGanadoresRuta.reduce((acc, curr) => acc + curr.total_vuelos, 0);
 
   const avgSovCompetidor = totalVuelosSov > 0
     ? Math.round(

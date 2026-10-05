@@ -82,6 +82,12 @@ const conCantidad = (label: string, valor: string, conteos?: Record<string, numb
   return `${label} (${conteos[valor]})`;
 };
 
+function Flecha() {
+  return (
+    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+  );
+}
+
 export default function BarraFiltros(props: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -199,9 +205,6 @@ export default function BarraFiltros(props: Props) {
     'appearance-none bg-[color:var(--sunk)] border border-white/10 text-slate-200 text-xs rounded-md ' +
     'pl-2.5 pr-7 py-1 focus:border-[color:var(--acc)] transition-colors cursor-pointer min-h-8';
 
-  const Flecha = () => (
-    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-  );
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[color:var(--surf)] p-3 space-y-3">
