@@ -45,9 +45,9 @@ const IDU = (n: string) => `AEP-COR_2026-10-17-${n}_2026-10-24-0800_AP15D_7D_USD
 // F3 (TurismoCity, AR): checkout de Almundo 12% sobre el listado -> "a revisar" (se excluye); Despegar 900.
 // F4 (Kayak, 02/10): corrida vieja, solo aparece con fecha 02/10 o "TODAS".
 const FILAS: Fila[] = [
-  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Almundo', precio_sin_fee: 1000, cargo_gestion: 100, pct_fee: 10 }),
-  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Despegar', precio_sin_fee: 900, cargos: 60 }),
-  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Atrápalo', precio_sin_fee: 950, cargo_gestion: 50, pct_fee: 5.3 }),
+  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Almundo', tarifa_base: 600, precio_sin_fee: 1000, cargo_gestion: 100, pct_fee: 10 }),
+  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Despegar', tarifa_base: 500, precio_sin_fee: 900, cargos: 60 }),
+  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Atrápalo', tarifa_base: 520, precio_sin_fee: 950, cargo_gestion: 50, pct_fee: 5.3 }),
   fila({ id_pareja_vuelo: ID('0700'), aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR200', hora_salida_ida: '07:00', vendedor: 'Almundo', precio_sin_fee: 800, cargo_gestion: 40, pct_fee: 5 }),
   fila({ id_pareja_vuelo: ID('0700'), aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR200', hora_salida_ida: '07:00', vendedor: 'Despegar', precio_sin_fee: 800 }),
   fila({ id_pareja_vuelo: ID('0700'), fuente: 'TurismoCity', aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR200', hora_salida_ida: '07:00', vendedor: 'Almundo', precio_sin_fee: 850, cargo_gestion: 42.5, pct_fee: 5 }),
@@ -191,9 +191,9 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(f1.fee_almundo_monto).toBe(100);
     expect(f1.margen_fee_monto).toBe(70);
     expect(f1.estado_mejora).toBe('FUERA_ALCANCE');
-    // Precio sin fee 1000 vs 900 del competidor: +11,1% (umbral 10%).
+    // Tarifa base de Almundo contra la del competidor mas barato (umbral 10%).
     expect(f1.alerta_tarifa_base).toBe(true);
-    expect(f1.tarifa_dif_pct).toBe(11.1);
+    expect(f1.tarifa_dif_pct).toBe(20); // tarifa base 600 vs 500 del competidor mas barato
   });
 
   it('un vuelo con un solo vendedor valido no cuenta como win ni como brecha', async () => {

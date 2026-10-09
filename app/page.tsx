@@ -371,6 +371,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               itinerarios.map((item, idx) => {
                 const acento = acentoPorEstado[item.estado_mejora] ?? acentoPorEstado.SIN_COMPARACION;
                 const mejora = calcularMejora(item.vendedores ?? [], competidor);
+                const almundoTarifa = (item.vendedores ?? []).find((v) => v.vendedor === 'Almundo')?.tarifa_base ?? null;
                 const vendedores = item.vendedores ?? [];
                 const filas: { label: string; key: 'tarifa_base' | 'impuestos' | 'tasas' | 'cargos' | 'cargo_gestion' | 'precio_sin_fee' | 'precio_total' | 'precio_listado_vendedor'; fuerte?: boolean }[] = [
                   { label: 'Tarifa base', key: 'tarifa_base' },
@@ -545,11 +546,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                   ))}
                                 </tr>
                               ))}
-                              {vendedores.length > 0 && item.precio_almundo !== null && (
+                              {vendedores.length > 0 && almundoTarifa !== null && (
                                 <tr>
-                                  <td className="py-2 px-3 text-slate-400">Precio sin fee de Almundo vs este vendedor</td>
+                                  <td className="py-2 px-3 text-slate-400">Tarifa base de Almundo vs este vendedor</td>
                                   {vendedores.map((v) => {
-                                    const dif = v.vendedor === 'Almundo' || v.a_revisar ? null : diferenciaTarifaPct(item.precio_almundo, v.precio_sin_fee);
+                                    const dif = v.vendedor === 'Almundo' || v.a_revisar ? null : diferenciaTarifaPct(almundoTarifa, v.tarifa_base);
                                     return (
                                       <td key={v.vendedor} className={`${dato} py-2 px-3 text-right whitespace-nowrap ${dif !== null && dif >= UMBRAL_ALERTA_TARIFA_PCT ? 'text-amber-300 font-semibold' : 'text-slate-400'}`}>
                                         {dif === null ? '-' : formatoGapPct(Math.round(dif * 10) / 10)}

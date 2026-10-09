@@ -18,11 +18,8 @@ export const PISO_FEE_PCT = 3;
 // marcar "fee bajo el piso".
 export const TOLERANCIA_REDONDEO_FEE = 1;
 
-// Alerta de tarifa: Almundo esta este % o mas por encima del competidor mas barato.
-// Se compara el precio SIN fee (tarifa base + impuestos + tasas) y no la columna
-// tarifa_base sola: cada vendedor reparte distinto el total entre tarifa, impuestos
-// y tasas (ej. combustible en impuestos o en tarifa), y comparar solo tarifa_base da
-// diferencias que no existen en el precio real.
+// Alerta de tarifa base: la tarifa base de Almundo esta este % o mas por encima de la
+// del competidor mas barato (tarifa_base contra tarifa_base, sin impuestos ni tasas).
 export const UMBRAL_ALERTA_TARIFA_PCT = 10;
 
 export function diferenciaTarifaPct(almundo: number | null, competidor: number | null): number | null {

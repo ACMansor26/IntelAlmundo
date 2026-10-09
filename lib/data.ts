@@ -593,6 +593,7 @@ async function getTablaItinerariosAlmundo_sinCache(
           precio_total AS precio_total_almundo,
           pct_fee AS fee_almundo_pct,
           cargo_gestion AS fee_almundo_monto,
+          tarifa_base AS tarifa_almundo,
           a_revisar AS almundo_a_revisar
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql} AND vendedor = 'Almundo'
@@ -617,9 +618,9 @@ async function getTablaItinerariosAlmundo_sinCache(
         ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
       ),
       competidor_min AS (
-        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS min_sin_fee
+        SELECT id_pareja_vuelo, fuente, MIN(tarifa_base) AS min_tarifa
         FROM ${VISTA_PRECIOS}
-        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND precio_sin_fee > 0
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND tarifa_base > 0
         GROUP BY id_pareja_vuelo, fuente
       ),
       metricas AS (
@@ -642,11 +643,11 @@ async function getTablaItinerariosAlmundo_sinCache(
           END AS gap_min_pct,
           (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso_fee,
           CASE
-            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo IS NOT NULL AND cm.min_sin_fee > 0
-              THEN ROUND(((a.precio_almundo - cm.min_sin_fee) / cm.min_sin_fee) * 100, 1)
+            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.tarifa_almundo IS NOT NULL AND cm.min_tarifa > 0
+              THEN ROUND(((a.tarifa_almundo - cm.min_tarifa) / cm.min_tarifa) * 100, 1)
             ELSE NULL
           END AS tarifa_dif_pct,
-          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo >= cm.min_sin_fee * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base,
+          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.tarifa_almundo >= cm.min_tarifa * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base,
           a.fee_almundo_monto,
           GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) AS margen_fee_monto,
           CASE
@@ -856,7 +857,7 @@ async function getConteosSegmento_sinCache(
       ),
       almundo_best AS (
         SELECT DISTINCT ON (id_pareja_vuelo, fuente)
-          id_pareja_vuelo, fuente, precio_sin_fee AS precio_almundo, precio_total AS precio_total_almundo, cargo_gestion AS fee_almundo_monto, a_revisar AS almundo_a_revisar
+          id_pareja_vuelo, fuente, precio_sin_fee AS precio_almundo, precio_total AS precio_total_almundo, cargo_gestion AS fee_almundo_monto, tarifa_base AS tarifa_almundo, a_revisar AS almundo_a_revisar
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql} AND vendedor = 'Almundo'
         ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
@@ -868,9 +869,9 @@ async function getConteosSegmento_sinCache(
         ORDER BY id_pareja_vuelo, fuente, precio_total ASC
       ),
       competidor_min AS (
-        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS min_sin_fee
+        SELECT id_pareja_vuelo, fuente, MIN(tarifa_base) AS min_tarifa
         FROM ${VISTA_PRECIOS}
-        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND precio_sin_fee > 0
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND tarifa_base > 0
         GROUP BY id_pareja_vuelo, fuente
       ),
       metricas AS (
@@ -899,11 +900,11 @@ async function getConteosSegmento_sinCache(
           END AS estado_mejora,
           (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso,
           CASE
-            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo IS NOT NULL AND cm.min_sin_fee > 0
-              THEN ROUND(((a.precio_almundo - cm.min_sin_fee) / cm.min_sin_fee) * 100, 1)
+            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.tarifa_almundo IS NOT NULL AND cm.min_tarifa > 0
+              THEN ROUND(((a.tarifa_almundo - cm.min_tarifa) / cm.min_tarifa) * 100, 1)
             ELSE NULL
           END AS tarifa_dif_pct,
-          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo >= cm.min_sin_fee * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base
+          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.tarifa_almundo >= cm.min_tarifa * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
         LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
