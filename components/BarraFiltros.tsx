@@ -31,6 +31,8 @@ interface Props {
   regiones?: string[];
   tiposVuelo?: string[];
   competidores?: string[];
+  // Matriz: permite "Todos" (default) para ver a todos los competidores a la vez.
+  permitirTodos?: boolean;
 
   // Conteos por opcion (mejora #5): "AEP-COR (18)" en vez de solo "AEP-COR".
   // Opcionales -- si no llegan, el select funciona igual pero sin el numero.
@@ -101,7 +103,8 @@ export default function BarraFiltros(props: Props) {
   const aeroAct = props.aerolinea || props.aerolineaActual || 'TODAS';
   const tipoVueloAct = props.tipoVuelo || 'TODOS';
   const regionAct = props.region || 'TODAS';
-  const competidorAct = props.competidor || 'Despegar';
+  const competidorDefault = props.permitirTodos ? 'TODOS' : 'Despegar';
+  const competidorAct = props.competidor || competidorDefault;
   const fechaAct = props.fecha || 'ULTIMA';
   const listaFechas = props.fechas ?? [];
 
@@ -146,7 +149,7 @@ export default function BarraFiltros(props: Props) {
   const actualizarCompetidor = (valor: string) => {
     const params = new URLSearchParams(searchParams.toString());
 
-    if (valor && valor !== 'Despegar') {
+    if (valor && valor !== competidorDefault) {
       params.set('competidor', valor);
     } else {
       params.delete('competidor');
@@ -283,7 +286,7 @@ export default function BarraFiltros(props: Props) {
         </div>
 
         {/* Filtro: Competidor a comparar (1-a-1 vs. Almundo) */}
-        <div className={claseChip(competidorAct !== 'Despegar')}>
+        <div className={claseChip(competidorAct !== competidorDefault)}>
           <label htmlFor="select-competidor" className="text-[11px] font-medium text-slate-400">Comparar vs</label>
           <div className="relative">
             <select
@@ -292,6 +295,7 @@ export default function BarraFiltros(props: Props) {
               onChange={(e) => actualizarCompetidor(e.target.value)}
               className={claseSelect}
             >
+              {props.permitirTodos && <option value="TODOS">Todos</option>}
               {listaCompetidores.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}

@@ -2,6 +2,7 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import { unstable_cache } from 'next/cache';
+import { PISO_FEE_PCT, TOLERANCIA_REDONDEO_FEE } from './mejora';
 
 // ==============================================================================
 // 1. POOL DE CONEXIÓN A NEON (fix #6 — driver serverless, deploy confirmado en Vercel)
@@ -73,6 +74,10 @@ export interface DetalleVendedor {
 }
 
 export interface ItinerarioAlmundo {
+  bajo_piso_fee: boolean;
+  fee_almundo_monto: number | null;
+  margen_fee_monto: number | null;
+  estado_mejora: 'GANANDO' | 'CERRABLE' | 'FUERA_ALCANCE' | 'SIN_COMPARACION';
   id_pareja_vuelo: string;
   ruta: string;
   region: string;
@@ -400,7 +405,10 @@ function normalizarFiltros(
 // ==============================================================================
 // 3b. ALLOWLIST DE SEGMENTOS (fix #1)
 // ==============================================================================
-const SEGMENTOS_VALIDOS = ['TODOS', 'OPORTUNIDADES', 'VS_DESPEGAR', 'DESALINEADOS', 'A_REVISAR'] as const;
+// Piso de fee como literal numerico (constante del codigo, no input del usuario).
+const PISO_FEE_PCT_SQL = Number(PISO_FEE_PCT);
+
+const SEGMENTOS_VALIDOS = ['TODOS', 'OPORTUNIDADES', 'VS_DESPEGAR', 'DESALINEADOS', 'A_REVISAR', 'GANANDO', 'CERRABLE', 'FUERA_ALCANCE', 'BAJO_PISO'] as const;
 type SegmentoValido = typeof SEGMENTOS_VALIDOS[number];
 
 function normalizarSegmento(candidato: string | undefined): SegmentoValido {
@@ -579,6 +587,7 @@ async function getTablaItinerariosAlmundo_sinCache(
           precio_sin_fee AS precio_almundo,
           precio_total AS precio_total_almundo,
           pct_fee AS fee_almundo_pct,
+          cargo_gestion AS fee_almundo_monto,
           a_revisar AS almundo_a_revisar
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql} AND vendedor = 'Almundo'
@@ -588,10 +597,10 @@ async function getTablaItinerariosAlmundo_sinCache(
         SELECT DISTINCT ON (id_pareja_vuelo, fuente)
           id_pareja_vuelo,
           fuente,
-          precio_sin_fee AS precio_competidor
+          precio_total AS precio_competidor
         FROM ${VISTA_PRECIOS}
-        WHERE ${whereSql} AND vendedor = $${competidorIdx}::text AND NOT a_revisar
-        ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar
+        ORDER BY id_pareja_vuelo, fuente, precio_total ASC
       ),
       ganadores AS (
         SELECT DISTINCT ON (id_pareja_vuelo, fuente)
@@ -620,14 +629,23 @@ async function getTablaItinerariosAlmundo_sinCache(
               THEN ROUND(((a.precio_almundo - b.mejor_precio_mercado) / b.mejor_precio_mercado) * 100, 1)
             ELSE NULL
           END AS gap_min_pct,
+          (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso_fee,
+          a.fee_almundo_monto,
+          GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) AS margen_fee_monto,
           CASE
-            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
-              THEN (a.precio_almundo - comp.precio_competidor)
+            WHEN COALESCE(a.almundo_a_revisar, FALSE) OR a.precio_total_almundo IS NULL OR comp.precio_competidor IS NULL THEN 'SIN_COMPARACION'
+            WHEN (a.precio_total_almundo - comp.precio_competidor) <= 0 THEN 'GANANDO'
+            WHEN (a.precio_total_almundo - comp.precio_competidor) <= GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) THEN 'CERRABLE'
+            ELSE 'FUERA_ALCANCE'
+          END AS estado_mejora,
+          CASE
+            WHEN a.precio_total_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
+              THEN (a.precio_total_almundo - comp.precio_competidor)
             ELSE NULL
           END AS spread_competidor_monto,
           CASE
-            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL AND comp.precio_competidor > 0
-              THEN ROUND(((a.precio_almundo - comp.precio_competidor) / comp.precio_competidor) * 100, 1)
+            WHEN a.precio_total_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL AND comp.precio_competidor > 0
+              THEN ROUND(((a.precio_total_almundo - comp.precio_competidor) / comp.precio_competidor) * 100, 1)
             ELSE NULL
           END AS spread_competidor_pct,
           CASE
@@ -651,6 +669,8 @@ async function getTablaItinerariosAlmundo_sinCache(
           CASE
             WHEN $${segParamIdx}::text = 'OPORTUNIDADES' THEN estado_almundo = 'OPORTUNIDAD'
             WHEN $${segParamIdx}::text = 'VS_DESPEGAR' THEN spread_competidor_monto < 0
+            WHEN $${segParamIdx}::text IN ('GANANDO', 'CERRABLE', 'FUERA_ALCANCE') THEN estado_mejora = $${segParamIdx}::text
+            WHEN $${segParamIdx}::text = 'BAJO_PISO' THEN bajo_piso_fee
             WHEN $${segParamIdx}::text = 'DESALINEADOS' THEN estado_almundo = 'DESALINEADO'
             WHEN $${segParamIdx}::text = 'A_REVISAR' THEN a_revisar
             ELSE TRUE
@@ -746,6 +766,10 @@ async function getTablaItinerariosAlmundo_sinCache(
       gap_min_monto: num(r.gap_min_monto),
       spread_competidor_pct: num(r.spread_competidor_pct),
       spread_competidor_monto: num(r.spread_competidor_monto),
+      bajo_piso_fee: Boolean(r.bajo_piso_fee),
+      fee_almundo_monto: num(r.fee_almundo_monto),
+      margen_fee_monto: num(r.margen_fee_monto),
+      estado_mejora: r.estado_mejora as ItinerarioAlmundo['estado_mejora'],
       a_revisar: Boolean(r.a_revisar),
       estado_almundo: r.estado_almundo as ItinerarioAlmundo['estado_almundo']
     }));
@@ -773,6 +797,10 @@ export interface ConteosSegmento {
   vs_competidor: number;
   desalineados: number;
   a_revisar: number;
+  ganando: number;
+  cerrables: number;
+  fuera_alcance: number;
+  bajo_piso: number;
 }
 
 async function getConteosSegmento_sinCache(
@@ -805,16 +833,16 @@ async function getConteosSegmento_sinCache(
       ),
       almundo_best AS (
         SELECT DISTINCT ON (id_pareja_vuelo, fuente)
-          id_pareja_vuelo, fuente, precio_sin_fee AS precio_almundo, a_revisar AS almundo_a_revisar
+          id_pareja_vuelo, fuente, precio_sin_fee AS precio_almundo, precio_total AS precio_total_almundo, cargo_gestion AS fee_almundo_monto, a_revisar AS almundo_a_revisar
         FROM ${VISTA_PRECIOS}
         WHERE ${whereSql} AND vendedor = 'Almundo'
         ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
       ),
       competidor_best AS (
-        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio_sin_fee AS precio_competidor
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio_total AS precio_competidor
         FROM ${VISTA_PRECIOS}
-        WHERE ${whereSql} AND vendedor = $${competidorIdx}::text AND NOT a_revisar
-        ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar
+        ORDER BY id_pareja_vuelo, fuente, precio_total ASC
       ),
       metricas AS (
         SELECT
@@ -830,10 +858,17 @@ async function getConteosSegmento_sinCache(
             ELSE 'DESALINEADO'
           END AS estado_almundo,
           CASE
-            WHEN a.precio_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
-              THEN (a.precio_almundo - comp.precio_competidor)
+            WHEN a.precio_total_almundo IS NOT NULL AND comp.precio_competidor IS NOT NULL
+              THEN (a.precio_total_almundo - comp.precio_competidor)
             ELSE NULL
-          END AS spread_competidor_monto
+          END AS spread_competidor_monto,
+          CASE
+            WHEN COALESCE(a.almundo_a_revisar, FALSE) OR a.precio_total_almundo IS NULL OR comp.precio_competidor IS NULL THEN 'SIN_COMPARACION'
+            WHEN (a.precio_total_almundo - comp.precio_competidor) <= 0 THEN 'GANANDO'
+            WHEN (a.precio_total_almundo - comp.precio_competidor) <= GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) THEN 'CERRABLE'
+            ELSE 'FUERA_ALCANCE'
+          END AS estado_mejora,
+          (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
         LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
@@ -843,7 +878,11 @@ async function getConteosSegmento_sinCache(
         COUNT(*) FILTER (WHERE estado_almundo = 'OPORTUNIDAD') AS oportunidades,
         COUNT(*) FILTER (WHERE spread_competidor_monto < 0) AS vs_competidor,
         COUNT(*) FILTER (WHERE estado_almundo = 'DESALINEADO') AS desalineados,
-        COUNT(*) FILTER (WHERE a_revisar) AS a_revisar
+        COUNT(*) FILTER (WHERE a_revisar) AS a_revisar,
+        COUNT(*) FILTER (WHERE estado_mejora = 'GANANDO') AS ganando,
+        COUNT(*) FILTER (WHERE estado_mejora = 'CERRABLE') AS cerrables,
+        COUNT(*) FILTER (WHERE estado_mejora = 'FUERA_ALCANCE') AS fuera_alcance,
+        COUNT(*) FILTER (WHERE bajo_piso) AS bajo_piso
       FROM metricas;
       `,
       params
@@ -855,7 +894,114 @@ async function getConteosSegmento_sinCache(
       oportunidades: Number(r.oportunidades || 0),
       vs_competidor: Number(r.vs_competidor || 0),
       desalineados: Number(r.desalineados || 0),
-      a_revisar: Number(r.a_revisar || 0)
+      a_revisar: Number(r.a_revisar || 0),
+      ganando: Number(r.ganando || 0),
+      cerrables: Number(r.cerrables || 0),
+      fuera_alcance: Number(r.fuera_alcance || 0),
+      bajo_piso: Number(r.bajo_piso || 0)
+    };
+  } finally {
+    client.release();
+  }
+}
+
+
+// ==============================================================================
+// 5d. MEJORA AGREGADA: donde rinde mas bajar el fee. Misma regla que la matriz
+// (diferencia de precio final vs. competidor, fee bajable hasta el piso), sumada
+// por ruta y por aerolinea sobre TODOS los vuelos filtrados (no solo la pagina).
+// ==============================================================================
+export interface FilaMejoraAgregada {
+  clave: string;
+  cerrables: number;
+  fuera_alcance: number;
+  ganando: number;
+  fee_a_ceder: number; // suma de lo que hay que bajar de fee en los vuelos cerrables
+  residuo: number; // suma de lo que el fee no cubre en los vuelos fuera de alcance
+}
+export interface MejoraAgregada {
+  rutas: FilaMejoraAgregada[];
+  aerolineas: FilaMejoraAgregada[];
+}
+
+async function getMejoraAgregada_sinCache(
+  monedaOrFiltros: string | FiltrosDashboard = 'ARS',
+  ruta: string = 'TODAS',
+  fuente: string = 'TODAS',
+  aerolinea: string = 'TODAS',
+  tipo_vuelo: string = 'TODOS',
+  region: string = 'TODAS',
+  competidor: string = 'TODOS'
+): Promise<MejoraAgregada> {
+  const { whereSql, params, filtros } = normalizarFiltros(monedaOrFiltros, ruta, fuente, aerolinea, tipo_vuelo, region);
+  params.push(filtros.competidor || competidor);
+  const competidorIdx = params.length;
+  const client = await pool.connect();
+
+  try {
+    const q = await client.query(
+      `
+      WITH base_vuelos AS (
+        SELECT id_pareja_vuelo, fuente, MAX(ruta) AS ruta, MAX(aerolinea_ida) AS aerolinea
+        FROM ${VISTA_PRECIOS}
+        WHERE ${whereSql}
+        GROUP BY id_pareja_vuelo, fuente
+      ),
+      almundo_best AS (
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente)
+          id_pareja_vuelo, fuente, precio_sin_fee AS precio_almundo, precio_total AS precio_total_almundo,
+          cargo_gestion AS fee_almundo_monto, a_revisar AS almundo_a_revisar
+        FROM ${VISTA_PRECIOS}
+        WHERE ${whereSql} AND vendedor = 'Almundo'
+        ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
+      ),
+      competidor_best AS (
+        SELECT DISTINCT ON (id_pareja_vuelo, fuente) id_pareja_vuelo, fuente, precio_total AS precio_competidor
+        FROM ${VISTA_PRECIOS}
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar
+        ORDER BY id_pareja_vuelo, fuente, precio_total ASC
+      ),
+      metricas AS (
+        SELECT
+          b.ruta, b.aerolinea,
+          (a.precio_total_almundo - comp.precio_competidor) AS gap,
+          GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) AS margen
+        FROM base_vuelos b
+        JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente AND NOT COALESCE(a.almundo_a_revisar, FALSE)
+        JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
+        WHERE a.precio_total_almundo IS NOT NULL
+      ),
+      por_dimension AS (
+        SELECT 'ruta' AS dimension, ruta AS clave, gap, margen FROM metricas
+        UNION ALL
+        SELECT 'aerolinea', aerolinea, gap, margen FROM metricas
+      )
+      SELECT
+        dimension, clave,
+        COUNT(*) FILTER (WHERE gap > 0 AND gap <= margen) AS cerrables,
+        COUNT(*) FILTER (WHERE gap > margen) AS fuera_alcance,
+        COUNT(*) FILTER (WHERE gap <= 0) AS ganando,
+        COALESCE(SUM(gap) FILTER (WHERE gap > 0 AND gap <= margen), 0) AS fee_a_ceder,
+        COALESCE(SUM(gap - margen) FILTER (WHERE gap > margen), 0) AS residuo
+      FROM por_dimension
+      WHERE clave IS NOT NULL
+      GROUP BY dimension, clave
+      ORDER BY fee_a_ceder DESC, cerrables DESC, clave ASC;
+      `,
+      params
+    );
+
+    const fila = (r: any): FilaMejoraAgregada => ({
+      clave: r.clave,
+      cerrables: Number(r.cerrables),
+      fuera_alcance: Number(r.fuera_alcance),
+      ganando: Number(r.ganando),
+      fee_a_ceder: Number(r.fee_a_ceder),
+      residuo: Number(r.residuo)
+    });
+    return {
+      rutas: q.rows.filter((r) => r.dimension === 'ruta').map(fila),
+      aerolineas: q.rows.filter((r) => r.dimension === 'aerolinea').map(fila)
     };
   } finally {
     client.release();
@@ -1518,6 +1664,7 @@ const TAG = ['precios'];
 const _kpis = unstable_cache(getResumenKPIs_sinCache, ['getResumenKPIs'], { revalidate: CACHE_SEG, tags: TAG });
 const _tabla = unstable_cache(getTablaItinerariosAlmundo_sinCache, ['getTablaItinerariosAlmundo'], { revalidate: CACHE_SEG, tags: TAG });
 const _conteosSeg = unstable_cache(getConteosSegmento_sinCache, ['getConteosSegmento'], { revalidate: CACHE_SEG, tags: TAG });
+const _mejoraAgregada = unstable_cache(getMejoraAgregada_sinCache, ['getMejoraAgregada'], { revalidate: CACHE_SEG, tags: TAG });
 const _conteosFiltros = unstable_cache(getConteosFiltros_sinCache, ['getConteosFiltros'], { revalidate: CACHE_SEG, tags: TAG });
 export const obtenerDatosDashboard = unstable_cache(obtenerDatosDashboard_sinCache, ['obtenerDatosDashboard'], { revalidate: CACHE_SEG, tags: TAG });
 
@@ -1548,12 +1695,21 @@ export async function getTablaItinerariosAlmundo(...args: Parameters<typeof getT
   }
 }
 
+export async function getMejoraAgregada(...args: Parameters<typeof getMejoraAgregada_sinCache>): Promise<MejoraAgregada> {
+  try {
+    return await _mejoraAgregada(...args);
+  } catch (err) {
+    console.error('Error en getMejoraAgregada:', err);
+    return { rutas: [], aerolineas: [] };
+  }
+}
+
 export async function getConteosSegmento(...args: Parameters<typeof getConteosSegmento_sinCache>): Promise<ConteosSegmento> {
   try {
     return await _conteosSeg(...args);
   } catch (err) {
     console.error('Error en getConteosSegmento:', err);
-    return { total: 0, oportunidades: 0, vs_competidor: 0, desalineados: 0, a_revisar: 0 };
+    return { total: 0, oportunidades: 0, vs_competidor: 0, desalineados: 0, a_revisar: 0, ganando: 0, cerrables: 0, fuera_alcance: 0, bajo_piso: 0 };
   }
 }
 

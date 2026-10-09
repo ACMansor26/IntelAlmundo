@@ -183,7 +183,12 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(f1.precio_total_almundo).toBe(1100);
     expect(f1.vendedores.map((v) => v.vendedor)).toEqual(['Almundo', 'Despegar', 'Atrápalo']);
     expect(f1.vendedores.find((v) => v.vendedor === 'Despegar')?.es_mas_barato).toBe(true);
-    expect(f1.spread_competidor_monto).toBe(100);
+    // La brecha se mide sobre el precio final (lo que paga el cliente): 1100 - 900.
+    expect(f1.spread_competidor_monto).toBe(200);
+    // Fee 100 sobre 1000 sin fee; piso 3% = 30 -> margen 70, no alcanza para cerrar 200.
+    expect(f1.fee_almundo_monto).toBe(100);
+    expect(f1.margen_fee_monto).toBe(70);
+    expect(f1.estado_mejora).toBe('FUERA_ALCANCE');
   });
 
   it('un vuelo con un solo vendedor valido no cuenta como win ni como brecha', async () => {
