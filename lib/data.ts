@@ -62,6 +62,7 @@ export interface DetalleVendedor {
   tarifa_base: number | null;
   impuestos: number | null;
   tasas: number | null;
+  cargos: number | null;
   cargo_gestion: number | null;
   pct_fee: number | null;
   precio_sin_fee: number | null;
@@ -159,6 +160,7 @@ export interface DatosComposicionPrecio {
   tarifa_base: number;
   impuestos: number;
   tasas: number;
+  cargos: number;
   cargo_gestion: number;
   precio_total: number;
   pct_fee: number;
@@ -694,7 +696,7 @@ async function getTablaItinerariosAlmundo_sinCache(
       const fuentes = q.rows.map(r => r.fuente);
       const dq = await client.query(
         `
-        SELECT id_pareja_vuelo, fuente, vendedor, tarifa_base, impuestos, tasas, cargo_gestion,
+        SELECT id_pareja_vuelo, fuente, vendedor, tarifa_base, impuestos, tasas, cargos, cargo_gestion,
                pct_fee, precio_sin_fee, precio_total, precio_listado_vendedor,
                dif_checkout_vs_listado, pct_dif_checkout_vs_listado, a_revisar, min_sin_fee, n_validos
         FROM ${VISTA_PRECIOS}
@@ -711,6 +713,7 @@ async function getTablaItinerariosAlmundo_sinCache(
           tarifa_base: num(d.tarifa_base),
           impuestos: num(d.impuestos),
           tasas: num(d.tasas),
+          cargos: num(d.cargos),
           cargo_gestion: num(d.cargo_gestion),
           pct_fee: num(d.pct_fee),
           precio_sin_fee: num(d.precio_sin_fee),
@@ -1176,7 +1179,7 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
       paramsConCompetidor
     );
 
-    // 4. Composicion del precio por vendedor (tarifa base + impuestos + tasas + fee).
+    // 4. Composicion del precio por vendedor (tarifa base + impuestos + tasas + cargos + fee).
     // Solo sobre vuelos leidos por Almundo Y Despegar en la misma fuente, para que el
     // promedio compare lo mismo (si no, el mix de rutas distorsiona).
     const qComposicion = pool.query(
@@ -1193,6 +1196,7 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
         ROUND(AVG(tarifa_base)) AS tarifa_base,
         ROUND(AVG(impuestos)) AS impuestos,
         ROUND(AVG(tasas)) AS tasas,
+        ROUND(AVG(cargos)) AS cargos,
         ROUND(AVG(cargo_gestion)) AS cargo_gestion,
         ROUND(AVG(precio_total)) AS precio_total,
         ROUND(AVG(pct_fee), 1) AS pct_fee,
@@ -1370,6 +1374,7 @@ async function obtenerDatosDashboard_sinCache(filtros: FiltrosDashboard) {
         tarifa_base: Number(r.tarifa_base || 0),
         impuestos: Number(r.impuestos || 0),
         tasas: Number(r.tasas || 0),
+        cargos: Number(r.cargos || 0),
         cargo_gestion: Number(r.cargo_gestion || 0),
         precio_total: Number(r.precio_total || 0),
         pct_fee: Number(r.pct_fee || 0),

@@ -35,7 +35,7 @@ describe.skipIf(!url)('contrato de esquema con la base real', () => {
       `SELECT column_name, data_type FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'precios_vuelos'
          AND column_name = ANY($1)`,
-      [['tarifa_base', 'impuestos', 'tasas', 'cargo_gestion', 'precio_total', 'precio_sin_fee', 'pct_fee', 'pct_dif_checkout_vs_listado']]
+      [['tarifa_base', 'impuestos', 'tasas', 'cargos', 'cargo_gestion', 'precio_total', 'precio_sin_fee', 'pct_fee', 'pct_dif_checkout_vs_listado']]
     );
     for (const r of res.rows) expect(r.data_type, r.column_name).toBe('numeric');
   });

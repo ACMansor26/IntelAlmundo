@@ -76,6 +76,7 @@ const COLOR_CON_FEE = '#F59E0B';
 const COLOR_TARIFA = '#38BDF8';
 const COLOR_IMPUESTOS = '#6366F1';
 const COLOR_TASAS = '#A78BFA';
+const COLOR_CARGOS = '#F59E0B';
 const COLOR_FEE = 'var(--acc)';
 
 const COLORES_HISTOGRAMA: Record<string, string> = {
@@ -402,7 +403,7 @@ export default function GraficosDashboard({
           <div className="bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] border border-white/10 hover:border-white/20 transition-colors rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-black/30">
             <div>
               <h3 className="text-sm font-semibold text-white">4. Composición del Precio por Vendedor</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Promedio de tarifa base, impuestos, tasas y fee en vuelos leídos por Almundo y Despegar</p>
+              <p className="text-[11px] text-slate-400 mt-1">Promedio de tarifa base, impuestos, tasas, cargos y fee en vuelos leídos por Almundo y Despegar</p>
             </div>
 
             <div className="h-56 w-full" role="img" aria-label="4. Gráfico de barras apiladas: composición del precio promedio de cada vendedor en tarifa base, impuestos, tasas y fee. Los mismos datos están en la tabla de abajo.">
@@ -425,12 +426,13 @@ export default function GraficosDashboard({
                   <Bar dataKey="tarifa_base" name="Tarifa base" stackId="p" fill={COLOR_TARIFA} />
                   <Bar dataKey="impuestos" name="Impuestos" stackId="p" fill={COLOR_IMPUESTOS} />
                   <Bar dataKey="tasas" name="Tasas" stackId="p" fill={COLOR_TASAS} />
+                  <Bar dataKey="cargos" name="Cargos" stackId="p" fill={COLOR_CARGOS} />
                   <Bar dataKey="cargo_gestion" name="Fee" stackId="p" fill={COLOR_FEE} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <TablaDatos titulo="Composición del precio por vendedor" filas={datosComposicion} columnas={[{ key: 'vendedor', label: 'Vendedor' }, { key: 'tarifa_base', label: 'Tarifa base', formato: (v) => `${prefijo}${num(v)}` }, { key: 'impuestos', label: 'Impuestos', formato: (v) => `${prefijo}${num(v)}` }, { key: 'tasas', label: 'Tasas', formato: (v) => `${prefijo}${num(v)}` }, { key: 'cargo_gestion', label: 'Fee', formato: (v) => `${prefijo}${num(v)}` }, { key: 'precio_total', label: 'Precio total', formato: (v) => `${prefijo}${num(v)}` }, { key: 'pct_fee', label: 'Fee %', formato: pct }, { key: 'muestras', label: 'Lecturas', formato: num }]} />
+            <TablaDatos titulo="Composición del precio por vendedor" filas={datosComposicion} columnas={[{ key: 'vendedor', label: 'Vendedor' }, { key: 'tarifa_base', label: 'Tarifa base', formato: (v) => `${prefijo}${num(v)}` }, { key: 'impuestos', label: 'Impuestos', formato: (v) => `${prefijo}${num(v)}` }, { key: 'tasas', label: 'Tasas', formato: (v) => `${prefijo}${num(v)}` }, { key: 'cargos', label: 'Cargos', formato: (v) => `${prefijo}${num(v)}` }, { key: 'cargo_gestion', label: 'Fee', formato: (v) => `${prefijo}${num(v)}` }, { key: 'precio_total', label: 'Precio total', formato: (v) => `${prefijo}${num(v)}` }, { key: 'pct_fee', label: 'Fee %', formato: pct }, { key: 'muestras', label: 'Lecturas', formato: num }]} />
 
             <div className="bg-[color:var(--sunk)] border border-slate-800 rounded-lg p-3 space-y-1 text-[11px]">
               <p className="text-slate-300"><strong className="text-[color:var(--acc)]">Dónde se pierde el vuelo:</strong> Si la tarifa base es igual, la diferencia está en impuestos, tasas o fee. En Atrápalo las tasas incluyen el IVA; en Almundo, el IVA del fee.</p>

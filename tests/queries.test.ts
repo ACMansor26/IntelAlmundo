@@ -26,7 +26,7 @@ function fila(o: Fila): Fila {
     hora_salida_ida: '06:00', hora_salida_vuelta: '08:00', hora_llegada_ida: '07:30', hora_llegada_vuelta: '09:30',
     fecha_llegada_ida: '2026-10-17', fecha_llegada_vuelta: '2026-10-24',
     equipaje_mochila: 'SI', equipaje_mano: 'NO', equipaje_bodega: 'NO',
-    tarifa_base: 500, impuestos: 300, tasas: 100, cargo_gestion: 0, pct_fee: 0,
+    tarifa_base: 500, impuestos: 300, tasas: 100, cargos: 0, cargo_gestion: 0, pct_fee: 0,
     pct_dif_checkout_vs_listado: 0, dif_checkout_vs_listado: 0,
     fecha_obtencion: '2026-10-03 10:00:00',
     ...o,
@@ -46,7 +46,7 @@ const IDU = (n: string) => `AEP-COR_2026-10-17-${n}_2026-10-24-0800_AP15D_7D_USD
 // F4 (Kayak, 02/10): corrida vieja, solo aparece con fecha 02/10 o "TODAS".
 const FILAS: Fila[] = [
   fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Almundo', precio_sin_fee: 1000, cargo_gestion: 100, pct_fee: 10 }),
-  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Despegar', precio_sin_fee: 900 }),
+  fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Despegar', precio_sin_fee: 900, cargos: 60 }),
   fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Atrápalo', precio_sin_fee: 950, cargo_gestion: 50, pct_fee: 5.3 }),
   fila({ id_pareja_vuelo: ID('0700'), aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR200', hora_salida_ida: '07:00', vendedor: 'Almundo', precio_sin_fee: 800, cargo_gestion: 40, pct_fee: 5 }),
   fila({ id_pareja_vuelo: ID('0700'), aerolinea_ida: 'Aerolíneas Argentinas', numero_vuelo_ida: 'AR200', hora_salida_ida: '07:00', vendedor: 'Despegar', precio_sin_fee: 800 }),
@@ -183,6 +183,8 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(f1.precio_total_almundo).toBe(1100);
     expect(f1.vendedores.map((v) => v.vendedor)).toEqual(['Almundo', 'Despegar', 'Atrápalo']);
     expect(f1.vendedores.find((v) => v.vendedor === 'Despegar')?.es_mas_barato).toBe(true);
+    // los cargos (service fee) vienen como item aparte del fee
+    expect(f1.vendedores.find((v) => v.vendedor === 'Despegar')).toMatchObject({ cargos: 60, cargo_gestion: 0 });
     // La brecha se mide sobre el precio final (lo que paga el cliente): 1100 - 900.
     expect(f1.spread_competidor_monto).toBe(200);
     // Fee 100 sobre 1000 sin fee; piso 3% = 30 -> margen 70, no alcanza para cerrar 200.

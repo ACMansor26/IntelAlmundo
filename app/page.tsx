@@ -374,10 +374,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 const acento = acentoPorEstado[item.estado_mejora] ?? acentoPorEstado.SIN_COMPARACION;
                 const mejora = calcularMejora(item.vendedores ?? [], competidor);
                 const vendedores = item.vendedores ?? [];
-                const filas: { label: string; key: 'tarifa_base' | 'impuestos' | 'tasas' | 'cargo_gestion' | 'precio_sin_fee' | 'precio_total' | 'precio_listado_vendedor'; fuerte?: boolean }[] = [
+                const filas: { label: string; key: 'tarifa_base' | 'impuestos' | 'tasas' | 'cargos' | 'cargo_gestion' | 'precio_sin_fee' | 'precio_total' | 'precio_listado_vendedor'; fuerte?: boolean }[] = [
                   { label: 'Tarifa base', key: 'tarifa_base' },
                   { label: 'Impuestos', key: 'impuestos' },
                   { label: 'Tasas', key: 'tasas' },
+                  { label: 'Cargos (service fee)', key: 'cargos' },
                   { label: 'Fee del vendedor', key: 'cargo_gestion' },
                   { label: 'Precio sin fee', key: 'precio_sin_fee', fuerte: true },
                   { label: 'Precio final', key: 'precio_total', fuerte: true },

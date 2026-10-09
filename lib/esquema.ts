@@ -11,7 +11,7 @@ export const COLUMNAS_PRECIOS_VUELOS = [
   'hora_salida_ida', 'hora_salida_vuelta', 'hora_llegada_ida', 'hora_llegada_vuelta',
   'fecha_llegada_ida', 'fecha_llegada_vuelta',
   'equipaje_mochila', 'equipaje_mano', 'equipaje_bodega',
-  'tarifa_base', 'impuestos', 'tasas', 'cargo_gestion', 'precio_total', 'precio_sin_fee', 'pct_fee',
+  'tarifa_base', 'impuestos', 'tasas', 'cargos', 'cargo_gestion', 'precio_total', 'precio_sin_fee', 'pct_fee',
   'precio_listado_vendedor', 'dif_checkout_vs_listado', 'pct_dif_checkout_vs_listado',
   'fecha_obtencion'
 ] as const;
