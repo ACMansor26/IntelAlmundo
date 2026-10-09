@@ -191,6 +191,9 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(f1.fee_almundo_monto).toBe(100);
     expect(f1.margen_fee_monto).toBe(70);
     expect(f1.estado_mejora).toBe('FUERA_ALCANCE');
+    // Precio sin fee 1000 vs 900 del competidor: +11,1% (umbral 10%).
+    expect(f1.alerta_tarifa_base).toBe(true);
+    expect(f1.tarifa_dif_pct).toBe(11.1);
   });
 
   it('un vuelo con un solo vendedor valido no cuenta como win ni como brecha', async () => {

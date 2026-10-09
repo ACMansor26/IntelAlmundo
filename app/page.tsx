@@ -1,5 +1,5 @@
 // app/page.tsx
-import { calcularMejora, PISO_FEE_PCT } from '@/lib/mejora';
+import { calcularMejora, diferenciaTarifaPct, PISO_FEE_PCT, UMBRAL_ALERTA_TARIFA_PCT } from '@/lib/mejora';
 import React from 'react';
 import {
   getResumenKPIs,
@@ -213,10 +213,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   // Desalineado=rosa. "Todos" se queda con el naranja de marca.
   const tabsSegmento = [
     { id: 'TODOS', label: 'Todos', cantidad: conteosSegmento.total, colorActivo: 'bg-[color:var(--acc)] text-white' },
-    { id: 'GANANDO', label: competidor === 'TODOS' ? 'Más baratos' : `Más barato que ${competidor}`, cantidad: conteosSegmento.ganando, colorActivo: 'bg-emerald-600 text-white' },
-    { id: 'CERRABLE', label: 'Cerrables', cantidad: conteosSegmento.cerrables, colorActivo: 'bg-sky-500 text-white' },
-    { id: 'FUERA_ALCANCE', label: 'Fuera de alcance', cantidad: conteosSegmento.fuera_alcance, colorActivo: 'bg-rose-500 text-white' },
-    { id: 'BAJO_PISO', label: `Fee <${PISO_FEE_PCT}%`, cantidad: conteosSegmento.bajo_piso, colorActivo: 'bg-fuchsia-600 text-white' },
+    { id: 'ALERTA_TARIFA', label: 'Alerta tarifa base', cantidad: conteosSegmento.alerta_tarifa, colorActivo: 'bg-amber-500 text-white' },
+    { id: 'ALERTA_COMISION', label: 'Alerta comisión', cantidad: conteosSegmento.bajo_piso, colorActivo: 'bg-fuchsia-600 text-white' },
     { id: 'A_REVISAR', label: 'A revisar', cantidad: conteosSegmento.a_revisar, colorActivo: 'bg-amber-600 text-white' }
   ];
 
@@ -446,8 +444,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                 {m.competidor}: {m.estado === 'GANANDO' ? 'más barato' : m.estado === 'CERRABLE' ? `bajar fee ${formatoPrecio(m.mejora_monto)}` : `no alcanza (${formatoPrecio(m.residuo_monto)})`}
                               </div>
                             ))}
+                            {item.alerta_tarifa_base && (
+                              <div className="text-[10px] font-semibold text-amber-300">Revisar tarifa base {formatoGapPct(item.tarifa_dif_pct)}</div>
+                            )}
                             {item.bajo_piso_fee && (
-                              <div className="text-[10px] font-semibold text-fuchsia-300">Fee bajo el {PISO_FEE_PCT}%</div>
+                              <div className="text-[10px] font-semibold text-fuchsia-300">Revisar comisión (&lt;{PISO_FEE_PCT}%)</div>
                             )}
                             <div className="text-[10px] text-slate-400 mt-0.5">{item.fuente}</div>
                           </div>
@@ -544,6 +545,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                   ))}
                                 </tr>
                               ))}
+                              {vendedores.length > 0 && item.precio_almundo !== null && (
+                                <tr>
+                                  <td className="py-2 px-3 text-slate-400">Precio sin fee de Almundo vs este vendedor</td>
+                                  {vendedores.map((v) => {
+                                    const dif = v.vendedor === 'Almundo' || v.a_revisar ? null : diferenciaTarifaPct(item.precio_almundo, v.precio_sin_fee);
+                                    return (
+                                      <td key={v.vendedor} className={`${dato} py-2 px-3 text-right whitespace-nowrap ${dif !== null && dif >= UMBRAL_ALERTA_TARIFA_PCT ? 'text-amber-300 font-semibold' : 'text-slate-400'}`}>
+                                        {dif === null ? '-' : formatoGapPct(Math.round(dif * 10) / 10)}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              )}
                               {vendedores.length > 0 && (
                                 <tr>
                                   <td className="py-2 px-3 text-slate-400">Checkout vs listado</td>

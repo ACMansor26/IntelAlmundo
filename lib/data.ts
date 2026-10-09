@@ -2,7 +2,7 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import { unstable_cache } from 'next/cache';
-import { PISO_FEE_PCT, TOLERANCIA_REDONDEO_FEE } from './mejora';
+import { PISO_FEE_PCT, TOLERANCIA_REDONDEO_FEE, UMBRAL_ALERTA_TARIFA_PCT } from './mejora';
 
 // ==============================================================================
 // 1. POOL DE CONEXIÓN A NEON (fix #6 — driver serverless, deploy confirmado en Vercel)
@@ -75,6 +75,8 @@ export interface DetalleVendedor {
 }
 
 export interface ItinerarioAlmundo {
+  alerta_tarifa_base: boolean;
+  tarifa_dif_pct: number | null;
   bajo_piso_fee: boolean;
   fee_almundo_monto: number | null;
   margen_fee_monto: number | null;
@@ -409,8 +411,9 @@ function normalizarFiltros(
 // ==============================================================================
 // Piso de fee como literal numerico (constante del codigo, no input del usuario).
 const PISO_FEE_PCT_SQL = Number(PISO_FEE_PCT);
+const UMBRAL_TARIFA_SQL = Number(UMBRAL_ALERTA_TARIFA_PCT);
 
-const SEGMENTOS_VALIDOS = ['TODOS', 'OPORTUNIDADES', 'VS_DESPEGAR', 'DESALINEADOS', 'A_REVISAR', 'GANANDO', 'CERRABLE', 'FUERA_ALCANCE', 'BAJO_PISO'] as const;
+const SEGMENTOS_VALIDOS = ['TODOS', 'OPORTUNIDADES', 'VS_DESPEGAR', 'DESALINEADOS', 'A_REVISAR', 'GANANDO', 'CERRABLE', 'FUERA_ALCANCE', 'BAJO_PISO', 'ALERTA_TARIFA', 'ALERTA_COMISION'] as const;
 type SegmentoValido = typeof SEGMENTOS_VALIDOS[number];
 
 function normalizarSegmento(candidato: string | undefined): SegmentoValido {
@@ -613,6 +616,12 @@ async function getTablaItinerariosAlmundo_sinCache(
         WHERE ${whereSql} AND NOT a_revisar
         ORDER BY id_pareja_vuelo, fuente, precio_sin_fee ASC
       ),
+      competidor_min AS (
+        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS min_sin_fee
+        FROM ${VISTA_PRECIOS}
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND precio_sin_fee > 0
+        GROUP BY id_pareja_vuelo, fuente
+      ),
       metricas AS (
         SELECT
           b.*,
@@ -632,6 +641,12 @@ async function getTablaItinerariosAlmundo_sinCache(
             ELSE NULL
           END AS gap_min_pct,
           (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso_fee,
+          CASE
+            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo IS NOT NULL AND cm.min_sin_fee > 0
+              THEN ROUND(((a.precio_almundo - cm.min_sin_fee) / cm.min_sin_fee) * 100, 1)
+            ELSE NULL
+          END AS tarifa_dif_pct,
+          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo >= cm.min_sin_fee * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base,
           a.fee_almundo_monto,
           GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) AS margen_fee_monto,
           CASE
@@ -662,6 +677,7 @@ async function getTablaItinerariosAlmundo_sinCache(
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
         LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
+        LEFT JOIN competidor_min cm ON b.id_pareja_vuelo = cm.id_pareja_vuelo AND b.fuente = cm.fuente
         LEFT JOIN ganadores g ON b.id_pareja_vuelo = g.id_pareja_vuelo AND b.fuente = g.fuente
       ),
       filtrados AS (
@@ -672,7 +688,8 @@ async function getTablaItinerariosAlmundo_sinCache(
             WHEN $${segParamIdx}::text = 'OPORTUNIDADES' THEN estado_almundo = 'OPORTUNIDAD'
             WHEN $${segParamIdx}::text = 'VS_DESPEGAR' THEN spread_competidor_monto < 0
             WHEN $${segParamIdx}::text IN ('GANANDO', 'CERRABLE', 'FUERA_ALCANCE') THEN estado_mejora = $${segParamIdx}::text
-            WHEN $${segParamIdx}::text = 'BAJO_PISO' THEN bajo_piso_fee
+            WHEN $${segParamIdx}::text IN ('BAJO_PISO', 'ALERTA_COMISION') THEN bajo_piso_fee
+            WHEN $${segParamIdx}::text = 'ALERTA_TARIFA' THEN alerta_tarifa_base
             WHEN $${segParamIdx}::text = 'DESALINEADOS' THEN estado_almundo = 'DESALINEADO'
             WHEN $${segParamIdx}::text = 'A_REVISAR' THEN a_revisar
             ELSE TRUE
@@ -770,6 +787,8 @@ async function getTablaItinerariosAlmundo_sinCache(
       spread_competidor_pct: num(r.spread_competidor_pct),
       spread_competidor_monto: num(r.spread_competidor_monto),
       bajo_piso_fee: Boolean(r.bajo_piso_fee),
+      alerta_tarifa_base: Boolean(r.alerta_tarifa_base),
+      tarifa_dif_pct: num(r.tarifa_dif_pct),
       fee_almundo_monto: num(r.fee_almundo_monto),
       margen_fee_monto: num(r.margen_fee_monto),
       estado_mejora: r.estado_mejora as ItinerarioAlmundo['estado_mejora'],
@@ -804,6 +823,7 @@ export interface ConteosSegmento {
   cerrables: number;
   fuera_alcance: number;
   bajo_piso: number;
+  alerta_tarifa: number;
 }
 
 async function getConteosSegmento_sinCache(
@@ -847,6 +867,12 @@ async function getConteosSegmento_sinCache(
         WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar
         ORDER BY id_pareja_vuelo, fuente, precio_total ASC
       ),
+      competidor_min AS (
+        SELECT id_pareja_vuelo, fuente, MIN(precio_sin_fee) AS min_sin_fee
+        FROM ${VISTA_PRECIOS}
+        WHERE ${whereSql} AND (($${competidorIdx}::text = 'TODOS' AND vendedor <> 'Almundo') OR vendedor = $${competidorIdx}::text) AND NOT a_revisar AND precio_sin_fee > 0
+        GROUP BY id_pareja_vuelo, fuente
+      ),
       metricas AS (
         SELECT
           b.id_pareja_vuelo,
@@ -871,10 +897,17 @@ async function getConteosSegmento_sinCache(
             WHEN (a.precio_total_almundo - comp.precio_competidor) <= GREATEST(a.fee_almundo_monto - (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0), 0) THEN 'CERRABLE'
             ELSE 'FUERA_ALCANCE'
           END AS estado_mejora,
-          (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso
+          (NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.fee_almundo_monto IS NOT NULL AND a.fee_almundo_monto < (a.precio_almundo * ${PISO_FEE_PCT_SQL} / 100.0) - ${TOLERANCIA_REDONDEO_FEE}) AS bajo_piso,
+          CASE
+            WHEN NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo IS NOT NULL AND cm.min_sin_fee > 0
+              THEN ROUND(((a.precio_almundo - cm.min_sin_fee) / cm.min_sin_fee) * 100, 1)
+            ELSE NULL
+          END AS tarifa_dif_pct,
+          COALESCE(NOT COALESCE(a.almundo_a_revisar, FALSE) AND a.precio_almundo >= cm.min_sin_fee * (1 + ${UMBRAL_TARIFA_SQL} / 100.0), FALSE) AS alerta_tarifa_base
         FROM base_vuelos b
         LEFT JOIN almundo_best a ON b.id_pareja_vuelo = a.id_pareja_vuelo AND b.fuente = a.fuente
         LEFT JOIN competidor_best comp ON b.id_pareja_vuelo = comp.id_pareja_vuelo AND b.fuente = comp.fuente
+        LEFT JOIN competidor_min cm ON b.id_pareja_vuelo = cm.id_pareja_vuelo AND b.fuente = cm.fuente
       )
       SELECT
         COUNT(*) AS total,
@@ -885,7 +918,8 @@ async function getConteosSegmento_sinCache(
         COUNT(*) FILTER (WHERE estado_mejora = 'GANANDO') AS ganando,
         COUNT(*) FILTER (WHERE estado_mejora = 'CERRABLE') AS cerrables,
         COUNT(*) FILTER (WHERE estado_mejora = 'FUERA_ALCANCE') AS fuera_alcance,
-        COUNT(*) FILTER (WHERE bajo_piso) AS bajo_piso
+        COUNT(*) FILTER (WHERE bajo_piso) AS bajo_piso,
+        COUNT(*) FILTER (WHERE alerta_tarifa_base) AS alerta_tarifa
       FROM metricas;
       `,
       params
@@ -901,7 +935,8 @@ async function getConteosSegmento_sinCache(
       ganando: Number(r.ganando || 0),
       cerrables: Number(r.cerrables || 0),
       fuera_alcance: Number(r.fuera_alcance || 0),
-      bajo_piso: Number(r.bajo_piso || 0)
+      bajo_piso: Number(r.bajo_piso || 0),
+      alerta_tarifa: Number(r.alerta_tarifa || 0)
     };
   } finally {
     client.release();
@@ -1714,7 +1749,7 @@ export async function getConteosSegmento(...args: Parameters<typeof getConteosSe
     return await _conteosSeg(...args);
   } catch (err) {
     console.error('Error en getConteosSegmento:', err);
-    return { total: 0, oportunidades: 0, vs_competidor: 0, desalineados: 0, a_revisar: 0, ganando: 0, cerrables: 0, fuera_alcance: 0, bajo_piso: 0 };
+    return { total: 0, oportunidades: 0, vs_competidor: 0, desalineados: 0, a_revisar: 0, ganando: 0, cerrables: 0, fuera_alcance: 0, bajo_piso: 0, alerta_tarifa: 0 };
   }
 }
 

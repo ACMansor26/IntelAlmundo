@@ -58,3 +58,14 @@ describe('avisos y resto fuera de alcance', () => {
     expect(calcularMejora([v('Almundo', 100000, 2999.99), v('Despegar', 100000, 0)])!.bajo_piso).toBe(false); // redondeo de centavos
   });
 });
+
+describe('alerta de tarifa', () => {
+  it('diferencia porcentual contra el competidor y umbral del 10%', async () => {
+    const { diferenciaTarifaPct, UMBRAL_ALERTA_TARIFA_PCT } = await import('@/lib/mejora');
+    expect(UMBRAL_ALERTA_TARIFA_PCT).toBe(10);
+    expect(diferenciaTarifaPct(110, 100)).toBeCloseTo(10);
+    expect(diferenciaTarifaPct(90, 100)).toBeCloseTo(-10);
+    expect(diferenciaTarifaPct(100, null)).toBeNull();
+    expect(diferenciaTarifaPct(100, 0)).toBeNull();
+  });
+});
