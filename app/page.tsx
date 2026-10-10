@@ -599,27 +599,48 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                               <table className="w-full text-xs text-slate-300">
                                 <thead className="text-slate-400 border-b border-white/10">
                                   <tr>
-                                    <th className="py-2 px-3 text-left font-medium">vs competidor</th>
-                                    <th className="py-2 px-3 text-right font-medium">Precio final</th>
-                                    <th className="py-2 px-3 text-right font-medium">Diferencia</th>
-                                    <th className="py-2 px-3 text-right font-medium">Fee a bajar</th>
-                                    <th className="py-2 px-3 text-right font-medium">Mejora en $</th>
-                                    <th className="py-2 px-3 text-right font-medium">Queda</th>
-                                    <th className="py-2 px-3 text-left font-medium">Resultado</th>
+                                    {[
+                                      { l1: 'Competidor', l2: null, alinear: 'text-left' },
+                                      { l1: 'Precio', l2: 'final', alinear: 'text-right' },
+                                      { l1: 'Diferencia', l2: '% y $', alinear: 'text-right' },
+                                      { l1: 'Fee', l2: 'a bajar', alinear: 'text-right' },
+                                      { l1: 'Mejora', l2: 'en $', alinear: 'text-right' },
+                                      { l1: 'Queda', l2: 'sin cubrir', alinear: 'text-right' },
+                                      { l1: 'Resultado', l2: null, alinear: 'text-left' }
+                                    ].map((h) => (
+                                      <th key={h.l1} scope="col" className={`py-2 px-3 font-medium whitespace-nowrap leading-tight ${h.alinear}`}>
+                                        <span className="block">{h.l1}</span>
+                                        {h.l2 && <span className="block">{h.l2}</span>}
+                                      </th>
+                                    ))}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                  {mejora.vs.map((m) => (
-                                    <tr key={m.competidor}>
-                                      <td className="py-2 px-3 font-semibold text-slate-200">{m.competidor}</td>
-                                      <td className={`${dato} py-2 px-3 text-right`}>{formatoPrecio(m.precio_competidor)}</td>
-                                      <td className={`${dato} py-2 px-3 text-right`}>{formatoGapPct(m.diferencia_pct)} ({formatoGapMonto(m.diferencia_monto)})</td>
-                                      <td className={`${dato} py-2 px-3 text-right`}>{m.estado === 'GANANDO' ? '-' : `-${m.mejora_pct_fee.toFixed(1)} pp`}</td>
-                                      <td className={`${dato} py-2 px-3 text-right`}>{m.estado === 'GANANDO' ? '-' : formatoPrecio(m.mejora_monto)}</td>
-                                      <td className={`${dato} py-2 px-3 text-right ${m.residuo_monto > 0 ? 'text-rose-300' : ''}`}>{m.residuo_monto > 0 ? <>{formatoPrecio(m.residuo_monto)}{m.residuo_pct_tarifa !== null && <span className="text-[0.6875rem] text-slate-400"> ({m.residuo_pct_tarifa.toFixed(1)}% de la tarifa base)</span>}</> : '-'}</td>
-                                      <td className={`py-2 px-3 font-semibold ${acentoPorEstado[m.estado].text}`}>{acentoPorEstado[m.estado].label}</td>
-                                    </tr>
-                                  ))}
+                                  {mejora.vs.map((m) => {
+                                    const celda = `${dato} py-2 px-3 text-right whitespace-nowrap leading-tight`;
+                                    const segunda = 'block text-[0.6875rem] text-slate-400';
+                                    return (
+                                      <tr key={m.competidor}>
+                                        <td className="py-2 px-3 font-semibold text-slate-200 whitespace-nowrap">{m.competidor}</td>
+                                        <td className={celda}>{formatoPrecio(m.precio_competidor)}</td>
+                                        <td className={celda}>
+                                          <span className="block">{formatoGapPct(m.diferencia_pct)}</span>
+                                          <span className={segunda}>{formatoGapMonto(m.diferencia_monto)}</span>
+                                        </td>
+                                        <td className={celda}>{m.estado === 'GANANDO' ? '-' : `-${m.mejora_pct_fee.toFixed(1)} pp`}</td>
+                                        <td className={celda}>{m.estado === 'GANANDO' ? '-' : formatoPrecio(m.mejora_monto)}</td>
+                                        <td className={`${celda} ${m.residuo_monto > 0 ? 'text-rose-300' : ''}`}>
+                                          {m.residuo_monto > 0 ? (
+                                            <>
+                                              <span className="block">{formatoPrecio(m.residuo_monto)}</span>
+                                              {m.residuo_pct_tarifa !== null && <span className={segunda}>{m.residuo_pct_tarifa.toFixed(1)}% de la tarifa base</span>}
+                                            </>
+                                          ) : '-'}
+                                        </td>
+                                        <td className={`py-2 px-3 font-semibold whitespace-nowrap ${acentoPorEstado[m.estado].text}`}>{acentoPorEstado[m.estado].label}</td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             )}
