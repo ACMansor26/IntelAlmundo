@@ -1,5 +1,6 @@
 // app/graficos/page.tsx
 import React from 'react';
+import ConMarca from '@/components/ConMarca';
 import { Metadata } from 'next';
 import {
   obtenerDatosDashboard,
@@ -193,7 +194,7 @@ export default async function GraficosPage(props: PageProps) {
         {kpiItems.map((item) => (
           <div key={item.label} className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] p-5">
             <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[color:var(--acc)] to-[color:var(--acc)]/0" />
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{item.label}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400"><ConMarca texto={item.label} /></span>
             <p className={`${dato} text-3xl font-bold leading-none mt-2.5 ${item.color}`}>{item.value}</p>
             <span className="text-[10px] text-slate-400 mt-2 block">{item.sub}</span>
           </div>

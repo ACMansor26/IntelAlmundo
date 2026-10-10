@@ -19,6 +19,7 @@ import BarraFiltros from '@/components/BarraFiltros';
 import Link from 'next/link';
 import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import AppHeader from '@/components/AppHeader';
+import ConMarca from '@/components/ConMarca';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -251,7 +252,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             const contenido = (
               <>
                 <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[color:var(--acc)] to-[color:var(--acc)]/0" />
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-slate-400">{item.label}</span>
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-slate-400"><ConMarca texto={item.label} /></span>
                 <div className="mt-2 flex items-baseline gap-1.5">
                   <span className={`${dato} text-3xl font-bold leading-none tracking-[-0.02em] whitespace-nowrap ${item.color}`}>{item.value}</span>
                 </div>
@@ -514,7 +515,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400 mb-1">Posición de Almundo</div>
+                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400 mb-1"><ConMarca texto="Posición de Almundo" /></div>
                             <div className="text-slate-300">
                               {item.precio_almundo !== null
                                 ? <>Líder: <span className="text-emerald-400 font-semibold">{item.vendedor_ganador}</span> · gap {formatoGapPct(item.gap_min_pct)} ({formatoGapMonto(item.gap_min_monto)})</>

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 // cifras usan tabular-nums para que las columnas alineen.
 const fontBase = Montserrat({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700', '800', '900'],
   variable: '--font-base'
 });
 

@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { loginAction } from '@/app/actions/auth';
 
 export default function LoginForm() {
@@ -39,6 +40,7 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm bg-[color:var(--surf)] border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/80 space-y-5">
       <div className="text-center space-y-1.5">
+        <Image src="/almundo-logo-blanco.png" alt="Almundo" width={775} height={175} priority className="mx-auto mb-3 h-9 w-auto" />
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[color:var(--acc)]/15 text-[color:var(--acc2)] border border-[color:var(--acc)]/40 tracking-wider uppercase">
           Acceso Protegido
         </span>

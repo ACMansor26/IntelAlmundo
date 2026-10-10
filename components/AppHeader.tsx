@@ -2,6 +2,7 @@
 // Encabezado compartido de las tres pantallas (antes copiado en cada pagina).
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth';
 
@@ -45,6 +46,10 @@ export default function AppHeader({
   return (
     <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-white/10 pb-6">
       <div>
+        {/* Isologotipo horizontal en blanco (manual de marca: version blanca sobre fondo oscuro) */}
+        <Link href="/" aria-label="Almundo, ir al inicio" className="inline-block mb-4">
+          <Image src="/almundo-logo-blanco.png" alt="Almundo" width={775} height={175} priority className="h-8 w-auto" />
+        </Link>
         <div className="flex items-center gap-2 text-[11px] text-slate-400">
           <span aria-hidden="true" className={`inline-flex h-2 w-2 rounded-full ${frescura}`} />
           <span>{estado}</span>

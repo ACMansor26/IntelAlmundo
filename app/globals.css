@@ -10,9 +10,9 @@
   --surf2: #16203a;    /* inicio del degradado de cards */
   --sunk: #0b1120;     /* zonas hundidas (inputs, notas) */
   --sunk2: #050810;    /* zonas mas hundidas (chips, tabs) */
-  --acc: #ff5a00;      /* acento de marca */
-  --acc2: #ff7a29;     /* acento claro */
-  --glow: 255 90 0;    /* rgb del resplandor de fondo */
+  --acc: #ea6422;      /* naranja institucional (Pantone Orange 021 C) */
+  --acc2: #f08350;     /* acento claro */
+  --glow: 234 100 34;  /* rgb del resplandor de fondo */
   --font-heading: var(--font-base), system-ui, sans-serif;
   --font-data: var(--font-base), system-ui, sans-serif;
 }
@@ -129,3 +129,7 @@ html[data-cargando] body::before {
 @media (prefers-contrast: more) {
   .barra-sticky { background: var(--surf); border-color: rgb(255 255 255 / 0.4); }
 }
+
+/* Marca: titulos en Montserrat Black (h1 y titulos de seccion). Sin capa: gana sobre
+   las utilidades font-semibold/font-bold de Tailwind. */
+h1, h2 { font-weight: 900; }
