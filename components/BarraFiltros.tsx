@@ -1,8 +1,8 @@
 // components/BarraFiltros.tsx
 'use client';
 
-import React, { useTransition } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useEffect, useTransition } from 'react';
+import { ChevronDown, X } from 'lucide-react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 interface Props {
@@ -95,6 +95,12 @@ export default function BarraFiltros(props: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+
+  // Mientras se filtra, el resto de la pagina se atenua y aparece la barra de progreso.
+  useEffect(() => {
+    if (isPending) document.documentElement.setAttribute('data-cargando', '');
+    else document.documentElement.removeAttribute('data-cargando');
+  }, [isPending]);
 
   // Resolucion de valores actuales
   const monedaAct = props.moneda || props.monedaActual || 'ARS';
@@ -200,6 +206,16 @@ export default function BarraFiltros(props: Props) {
     });
   };
 
+  const chipsActivos: { clave: string; etiqueta: string; valor: string; quitar: () => void }[] = [
+    ...(activo(tipoVueloAct) ? [{ clave: 'tipo_vuelo', etiqueta: 'Tipo', valor: etiquetar(tipoVueloAct), quitar: () => actualizarFiltro('tipo_vuelo', 'TODOS') }] : []),
+    ...(activo(fuenteAct) ? [{ clave: 'fuente', etiqueta: 'Metabuscador', valor: fuenteAct, quitar: () => actualizarFiltro('fuente', 'TODAS') }] : []),
+    ...(competidorAct !== competidorDefault ? [{ clave: 'competidor', etiqueta: 'Comparar vs', valor: competidorAct, quitar: () => actualizarCompetidor(competidorDefault) }] : []),
+    ...(fechaAct !== 'ULTIMA' ? [{ clave: 'fecha', etiqueta: 'Datos', valor: fechaAct === 'TODAS' ? 'Todo el histórico' : etiquetaFecha(fechaAct), quitar: () => actualizarFecha('ULTIMA') }] : []),
+    ...(activo(rutaAct) ? [{ clave: 'ruta', etiqueta: 'Ruta', valor: rutaAct, quitar: () => actualizarFiltro('ruta', 'TODAS') }] : []),
+    ...(activo(regionAct) ? [{ clave: 'region', etiqueta: 'Región', valor: regionAct, quitar: () => actualizarFiltro('region', 'TODAS') }] : []),
+    ...(activo(aeroAct) ? [{ clave: 'aerolinea', etiqueta: 'Aerolínea', valor: etiquetarAerolinea(aeroAct), quitar: () => actualizarFiltro('aerolinea', 'TODAS') }] : [])
+  ];
+
   // Mejora #1: los <select> nativos comparten el mismo fondo/borde que los
   // botones, con la flecha del navegador ocultada (appearance-none) y una
   // propia dibujada a mano -- así no rompen la consistencia visual con el
@@ -210,7 +226,7 @@ export default function BarraFiltros(props: Props) {
 
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[color:var(--surf)] p-3 space-y-3">
+    <div className="barra-sticky z-30 rounded-2xl border border-white/10 bg-[color:var(--surf)] p-3 space-y-3 [@media(min-height:900px)]:xl:sticky [@media(min-height:900px)]:xl:top-3 [@media(min-height:900px)]:xl:shadow-lg [@media(min-height:900px)]:xl:shadow-black/30">
 
       {/* Fila 1: Moneda, Tipo de Vuelo, Metabuscador */}
       <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-2 sm:gap-3">
@@ -391,16 +407,33 @@ export default function BarraFiltros(props: Props) {
           </div>
         </div>
 
-        {/* Mejora #4: solo aparece si hay algun filtro de recorte activo */}
-        {hayFiltrosActivos && (
-          <button
-            onClick={limpiarFiltros}
-            className="text-[11px] font-medium text-slate-400 hover:text-[color:var(--acc2)] transition-colors underline decoration-dotted underline-offset-4"
-          >
-            Limpiar filtros
-          </button>
-        )}
+        {/* Los filtros activos se resumen como chips debajo de la barra */}
       </div>
+
+      {/* Resumen de filtros activos: cada chip se quita con un click */}
+      {chipsActivos.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5" aria-label="Filtros activos">
+          {chipsActivos.map((c) => (
+            <button
+              key={c.clave}
+              onClick={c.quitar}
+              aria-label={`Quitar filtro ${c.etiqueta}: ${c.valor}`}
+              className="inline-flex items-center gap-1 rounded-full border border-[color:var(--acc)]/40 bg-[color:var(--acc)]/[0.08] pl-2.5 pr-1.5 py-1 text-[0.6875rem] font-medium text-slate-200 transition-colors hover:bg-[color:var(--acc)]/20"
+            >
+              <span className="text-slate-400">{c.etiqueta}:</span> {c.valor}
+              <X aria-hidden="true" className="h-3 w-3 text-slate-400" />
+            </button>
+          ))}
+          {hayFiltrosActivos && (
+            <button
+              onClick={limpiarFiltros}
+              className="ml-1 text-[0.6875rem] font-medium text-slate-400 hover:text-[color:var(--acc2)] transition-colors underline decoration-dotted underline-offset-4"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Fuentes sin datos en la ultima ejecucion: solo con "Última ejecución" y todas las fuentes */}
       {fechaAct === 'ULTIMA' && fuenteAct === 'TODAS' && (props.fuentesAtrasadas ?? []).length > 0 && (

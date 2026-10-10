@@ -73,3 +73,59 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Movimiento y respuesta (principios de Apple Design)
+   ========================================================================== */
+
+/* Desplegables (<details>) con altura animada: sin JS. Donde no hay soporte
+   (::details-content / interpolate-size) abren de golpe como antes. */
+:root { interpolate-size: allow-keywords; }
+details::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition: block-size 0.3s cubic-bezier(0.32, 0.72, 0, 1), content-visibility 0.3s allow-discrete;
+}
+details[open]::details-content { block-size: auto; }
+
+/* Feedback inmediato al presionar (en pointer-down, no al soltar). */
+button:not(:disabled):active,
+nav a:active { scale: 0.97; }
+summary:active { scale: 0.995; }
+
+/* Estado de carga global: barra fina arriba + zonas atenuadas (ver ProgresoNavegacion). */
+.zona-carga { transition: opacity 0.15s ease; }
+html[data-cargando] .zona-carga { opacity: 0.55; pointer-events: none; }
+html[data-cargando] body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 200;
+  background: linear-gradient(90deg, transparent, var(--acc), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: barra-carga 1s ease-in-out infinite;
+}
+@keyframes barra-carga {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
+}
+
+/* Barra de filtros fija con material translucido (solo en pantallas altas). */
+.barra-sticky {
+  background: rgb(16 24 43 / 0.82);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-cargando] body::before { animation: none; background: var(--acc); }
+  details::details-content { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .barra-sticky { background: var(--surf); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .barra-sticky { background: var(--surf); border-color: rgb(255 255 255 / 0.4); }
+}

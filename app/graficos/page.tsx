@@ -111,6 +111,7 @@ export default async function GraficosPage(props: PageProps) {
       hrefMatriz={buildMatrizUrl()}
       hrefGraficos="#"
       actualizado={infoActualizacion.ultima}
+      horasDesdeActualizacion={infoActualizacion.horas}
     />
   );
 

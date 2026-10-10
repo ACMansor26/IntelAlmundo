@@ -150,51 +150,35 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // Ticker de KPIs: una sola franja con divisores finos en vez de 7 tarjetas
   // identicas con el mismo shadow/radius (el cliche "SaaS-card kit").
-  const kpiItems = [
+  const kpiItems: { label: string; value: string; sub: string | null; color: string; href?: string; resaltar?: boolean }[] = [
     {
-      label: 'Cerrables con fee',
-      value: conteosSegmento.cerrables.toLocaleString('es-AR'),
-      sub: 'bajando fee sin ir a pérdida',
-      color: conteosSegmento.cerrables > 0 ? 'text-sky-400' : 'text-slate-100'
+      label: 'Alerta tarifa base',
+      value: conteosSegmento.alerta_tarifa.toLocaleString('es-AR'),
+      sub: `tarifa base +${UMBRAL_ALERTA_TARIFA_PCT}% sobre la competencia`,
+      color: conteosSegmento.alerta_tarifa > 0 ? 'text-amber-300' : 'text-emerald-400',
+      href: buildPageUrl(1, 'ALERTA_TARIFA'),
+      resaltar: conteosSegmento.alerta_tarifa > 0
     },
     {
-      label: 'Fuera de alcance',
-      value: conteosSegmento.fuera_alcance.toLocaleString('es-AR'),
-      sub: 'el fee no alcanza',
-      color: conteosSegmento.fuera_alcance > 0 ? 'text-rose-400' : 'text-emerald-400'
+      label: 'Alerta comisión',
+      value: conteosSegmento.bajo_piso.toLocaleString('es-AR'),
+      sub: `fee bajo el ${PISO_FEE_PCT}%`,
+      color: conteosSegmento.bajo_piso > 0 ? 'text-fuchsia-300' : 'text-emerald-400',
+      href: buildPageUrl(1, 'ALERTA_COMISION'),
+      resaltar: conteosSegmento.bajo_piso > 0
+    },
+    {
+      label: 'Filas a revisar',
+      value: (kpis?.filas_a_revisar ?? 0).toLocaleString('es-AR'),
+      sub: 'checkout ≠ listado (>5%)',
+      color: (kpis?.filas_a_revisar ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400',
+      href: buildPageUrl(1, 'A_REVISAR')
     },
     {
       label: 'Cobertura Almundo',
       value: `${kpis?.share_presencia_almundo_pct ?? 0}%`,
       sub: 'vuelos ofertados',
       color: (kpis?.share_presencia_almundo_pct ?? 0) >= 80 ? 'text-emerald-400' : 'text-amber-400'
-    },
-    {
-      label: 'Fee Almundo',
-      value:
-        kpis?.fee_promedio_almundo_pct !== null && kpis?.fee_promedio_almundo_pct !== undefined
-          ? `${kpis.fee_promedio_almundo_pct.toFixed(1)}%`
-          : 'N/D',
-      sub: 'sobre precio sin fee',
-      color: 'text-slate-100'
-    },
-    {
-      label: 'Filas a Revisar',
-      value: (kpis?.filas_a_revisar ?? 0).toLocaleString('es-AR'),
-      sub: 'checkout ≠ listado (>5%)',
-      color: (kpis?.filas_a_revisar ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400'
-    },
-    {
-      label: 'Pares Filtrados',
-      value: (kpis?.total_vuelos_unicos ?? 0).toLocaleString('es-AR'),
-      sub: 'combinaciones',
-      color: 'text-sky-400'
-    },
-    {
-      label: 'Tarifa Ganadora Media',
-      value: formatoPrecio(kpis?.mejor_precio_promedio),
-      sub: null,
-      color: 'text-emerald-400'
     }
   ];
 
@@ -230,6 +214,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           hrefMatriz={buildPageUrl(1)}
           hrefGraficos={`/graficos?${new URLSearchParams({ moneda, ruta, fuente, aerolinea, tipo_vuelo, region, fecha, ...(competidor !== 'TODOS' ? { competidor } : {}) }).toString()}`}
           actualizado={infoActualizacion.ultima}
+          horasDesdeActualizacion={infoActualizacion.horas}
         />
 
         {/* Barra de Filtros con Metabuscador, Rutas y Aerolíneas */}
@@ -257,18 +242,28 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           conteoFuentes={conteosFiltros.porFuente}
         />
 
-        {/* Ticker de KPIs — una sola franja con divisores finos, no 7 cards identicas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-3">
-          {kpiItems.map((item) => (
-            <div key={item.label} className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] p-4">
-              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[color:var(--acc)] to-[color:var(--acc)]/0" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{item.label}</span>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className={`${dato} text-2xl font-bold leading-none whitespace-nowrap ${item.color}`}>{item.value}</span>
-              </div>
-              {item.sub && <span className="mt-1.5 block text-[10px] text-slate-400">{item.sub}</span>}
-            </div>
-          ))}
+        {/* KPIs: lo accionable primero; las alertas llevan directo a su pestaña */}
+        <div className="zona-carga grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {kpiItems.map((item) => {
+            const clase = `relative overflow-hidden rounded-2xl border bg-gradient-to-b from-[color:var(--surf2)] to-[color:var(--surf)] p-4 block ${
+              item.resaltar ? 'border-amber-400/40' : 'border-white/10'
+            } ${item.href ? 'transition-colors hover:border-white/30' : ''}`;
+            const contenido = (
+              <>
+                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[color:var(--acc)] to-[color:var(--acc)]/0" />
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-slate-400">{item.label}</span>
+                <div className="mt-2 flex items-baseline gap-1.5">
+                  <span className={`${dato} text-3xl font-bold leading-none tracking-[-0.02em] whitespace-nowrap ${item.color}`}>{item.value}</span>
+                </div>
+                {item.sub && <span className="mt-1.5 block text-[0.6875rem] text-slate-400">{item.sub}</span>}
+              </>
+            );
+            return item.href ? (
+              <Link key={item.label} href={item.href} className={clase}>{contenido}</Link>
+            ) : (
+              <div key={item.label} className={clase}>{contenido}</div>
+            );
+          })}
         </div>
 
         {/* Dónde rinde más bajar el fee: suma por ruta y aerolínea sobre todos los vuelos filtrados */}
@@ -291,7 +286,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               ].map((bloque) => (
                 <div key={bloque.titulo} className="overflow-x-auto rounded-xl border border-white/10 bg-[color:var(--surf)]">
                   <table className="w-full text-xs text-slate-300">
-                    <caption className="text-left px-3 pt-3 pb-1 text-[10px] uppercase tracking-wide text-slate-400">{bloque.titulo} · top 8 por fee a ceder</caption>
+                    <caption className="text-left px-3 pt-3 pb-1 text-[0.6875rem] uppercase tracking-wide text-slate-400">{bloque.titulo} · top 8 por fee a ceder</caption>
                     <thead className="text-slate-400 border-b border-white/10">
                       <tr>
                         <th scope="col" className="py-2 px-3 text-left font-medium">{bloque.titulo === 'Por ruta' ? 'Ruta' : 'Aerolínea'}</th>
@@ -357,7 +352,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           {/* Lista de vuelos como cards de metabuscador: cerrada muestra aerolínea,
               ruta y horarios; al abrirla (click) se despliega el desglose real del
               checkout por vendedor. <details> nativo = sin JS en el cliente. */}
-          <div className="space-y-3 p-4">
+          <div className="zona-carga space-y-3 p-4">
             {errorConsulta ? (
               <div role="alert" className="rounded-xl border border-rose-800/60 bg-rose-950/40 py-8 px-4 text-center text-rose-300 text-xs">
                 <p className="font-semibold text-sm">{errorConsulta}</p>
@@ -371,6 +366,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               itinerarios.map((item, idx) => {
                 const acento = acentoPorEstado[item.estado_mejora] ?? acentoPorEstado.SIN_COMPARACION;
                 const mejora = calcularMejora(item.vendedores ?? [], competidor);
+                const mejorComp = mejora && mejora.vs.length > 0 ? mejora.vs.reduce((m, x) => (x.precio_competidor < m.precio_competidor ? x : m)) : null;
                 const almundoTarifa = (item.vendedores ?? []).find((v) => v.vendedor === 'Almundo')?.tarifa_base ?? null;
                 const vendedores = item.vendedores ?? [];
                 const filas: { label: string; key: 'tarifa_base' | 'impuestos' | 'tasas' | 'cargos' | 'cargo_gestion' | 'precio_sin_fee' | 'precio_total' | 'precio_listado_vendedor'; fuerte?: boolean }[] = [
@@ -393,7 +389,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                       className="list-none [&::-webkit-details-marker]:hidden cursor-pointer px-4 py-3.5 hover:bg-white/[0.03] transition"
                       style={{ boxShadow: `inset 3px 0 0 0 ${acento.rail}` }}
                     >
-                      <div className="grid grid-cols-1 md:grid-cols-[minmax(150px,1.1fr)_minmax(0,1.6fr)_minmax(0,1.6fr)_auto] gap-3 md:gap-5 items-center">
+                      <div className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(120px,auto)_auto] gap-3 md:gap-5 items-center">
 
                         {/* Aerolínea + ruta */}
                         <div>
@@ -402,7 +398,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             <span className="px-1.5 py-0.5 rounded bg-sky-950/60 text-sky-300 font-semibold text-[11px] border border-sky-800/60">
                               {item.ruta}
                             </span>
-                            <span className="text-[10px] text-slate-400 bg-[color:var(--sunk2)] px-1.5 py-0.5 rounded border border-white/10">
+                            <span className="text-[0.6875rem] text-slate-400 bg-[color:var(--sunk2)] px-1.5 py-0.5 rounded border border-white/10">
                               {item.region}
                             </span>
                           </div>
@@ -414,7 +410,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           { titulo: 'Vuelta', fecha: item.fecha_vuelta, salida: item.hora_salida_vuelta, llegada: item.hora_llegada_vuelta, nro: item.numero_vuelo_vuelta, esc: item.escalas_vuelta, desde: item.aeropuerto_salida_vuelta ?? item.destino, hasta: item.aeropuerto_llegada_vuelta ?? item.origen }
                         ].map((t) => (
                           <div key={t.titulo}>
-                            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400">
                               {t.titulo} · <span className="text-slate-300 normal-case">{formatoFechaCorta(t.fecha)}</span>
                             </div>
                             <div className={`${dato} text-[15px] font-semibold text-white mt-0.5`}>
@@ -422,7 +418,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                               <ArrowRight aria-hidden="true" className="inline h-4 w-4 mx-1 text-slate-400" />
                               {formatoHora(t.llegada) ?? '--:--'}
                             </div>
-                            <div className={`${dato} text-[10px] text-slate-400 mt-0.5`}>
+                            <div className={`${dato} text-[0.6875rem] text-slate-400 mt-0.5`}>
                               {t.desde ?? ''}{t.desde && t.hasta ? <ArrowRight aria-hidden="true" className="inline h-3 w-3 mx-0.5" /> : null}{t.hasta ?? ''}
                               {t.nro ? ` · ${t.nro}` : ''}
                               {' · '}
@@ -433,25 +429,38 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </div>
                         ))}
 
-                        {/* Estado + indicador de despliegue */}
+                        {/* Precio final de Almundo y diferencia contra el competidor mas barato */}
+                        <div className="md:text-right">
+                          <div className={`${dato} text-lg font-semibold leading-tight tracking-[-0.01em] text-white`}>
+                            {item.precio_total_almundo !== null ? formatoPrecio(item.precio_total_almundo) : 'Sin precio'}
+                          </div>
+                          {mejorComp ? (
+                            <div className={`${dato} text-[0.6875rem] mt-0.5 ${mejorComp.diferencia_monto <= 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                              {formatoGapPct(Math.round(mejorComp.diferencia_pct * 10) / 10)} vs {mejorComp.competidor}
+                            </div>
+                          ) : (
+                            <div className="text-[0.6875rem] mt-0.5 text-slate-400">sin comparación</div>
+                          )}
+                        </div>
+
+                        {/* Un solo estado + alertas; el detalle por competidor va en el desplegable */}
                         <div className="flex items-center justify-between md:justify-end gap-3">
-                          <div className="text-right">
-                            <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${acento.text}`}>
+                          <div className="flex flex-col items-start md:items-end gap-1">
+                            <span className={`inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold ${acento.text}`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${acento.dot}`} />
                               {acento.label}
                             </span>
-                            {mejora && mejora.vs.map((m) => (
-                              <div key={m.competidor} className={`${dato} text-[10px] ${acentoPorEstado[m.estado].text}`}>
-                                {m.competidor}: {m.estado === 'GANANDO' ? 'más barato' : m.estado === 'CERRABLE' ? `bajar fee ${formatoPrecio(m.mejora_monto)}` : `no alcanza (${formatoPrecio(m.residuo_monto)})`}
-                              </div>
-                            ))}
                             {item.alerta_tarifa_base && (
-                              <div className="text-[10px] font-semibold text-amber-300">Revisar tarifa base {formatoGapPct(item.tarifa_dif_pct)}</div>
+                              <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-amber-300">
+                                Tarifa base {formatoGapPct(item.tarifa_dif_pct)}
+                              </span>
                             )}
                             {item.bajo_piso_fee && (
-                              <div className="text-[10px] font-semibold text-fuchsia-300">Revisar comisión (&lt;{PISO_FEE_PCT}%)</div>
+                              <span className="rounded-full border border-fuchsia-400/40 bg-fuchsia-400/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-fuchsia-300">
+                                Comisión &lt;{PISO_FEE_PCT}%
+                              </span>
                             )}
-                            <div className="text-[10px] text-slate-400 mt-0.5">{item.fuente}</div>
+                            <span className="text-[0.6875rem] text-slate-400">{item.fuente}</span>
                           </div>
                           <ChevronDown aria-hidden="true" className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
                         </div>
@@ -464,7 +473,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
                         <div className="space-y-3 text-xs">
                           <div className="space-y-3">
-                            <div className="text-[10px] uppercase tracking-wide text-slate-400">Itinerario</div>
+                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400">Itinerario</div>
                             {[
                               { titulo: 'Vuelo de ida', aerolinea: item.aerolinea, nro: item.numero_vuelo_ida, fecha: item.fecha_ida, salida: item.hora_salida_ida, desde: item.aeropuerto_salida_ida ?? item.origen, fechaLlegada: item.fecha_llegada_ida, llegada: item.hora_llegada_ida, hasta: item.aeropuerto_llegada_ida ?? item.destino, esc: item.escalas_ida },
                               { titulo: 'Vuelo de vuelta', aerolinea: item.aerolinea_vuelta ?? item.aerolinea, nro: item.numero_vuelo_vuelta, fecha: item.fecha_vuelta, salida: item.hora_salida_vuelta, desde: item.aeropuerto_salida_vuelta ?? item.destino, fechaLlegada: item.fecha_llegada_vuelta, llegada: item.hora_llegada_vuelta, hasta: item.aeropuerto_llegada_vuelta ?? item.origen, esc: item.escalas_vuelta }
@@ -497,7 +506,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">Equipaje</div>
+                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400 mb-1">Equipaje</div>
                             <div className="text-slate-300 space-y-0.5">
                               <div>Mochila: <span className="text-slate-400">{si(item.equipaje_mochila)}</span></div>
                               <div>Mano: <span className="text-slate-400">{si(item.equipaje_mano)}</span></div>
@@ -505,7 +514,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">Posición de Almundo</div>
+                            <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400 mb-1">Posición de Almundo</div>
                             <div className="text-slate-300">
                               {item.precio_almundo !== null
                                 ? <>Líder: <span className="text-emerald-400 font-semibold">{item.vendedor_ganador}</span> · gap {formatoGapPct(item.gap_min_pct)} ({formatoGapMonto(item.gap_min_monto)})</>
@@ -523,8 +532,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                 {vendedores.map((v) => (
                                   <th key={v.vendedor} className="py-2 px-3 text-right font-semibold text-slate-200 whitespace-nowrap">
                                     {v.vendedor}
-                                    {v.es_mas_barato && <span className="ml-1.5 text-[9px] font-semibold text-emerald-400">MÁS BARATO</span>}
-                                    {v.a_revisar && <span className="ml-1.5 text-[9px] font-semibold text-amber-400">A REVISAR</span>}
+                                    {v.es_mas_barato && <span className="ml-1.5 text-[0.625rem] font-semibold text-emerald-400">MÁS BARATO</span>}
+                                    {v.a_revisar && <span className="ml-1.5 text-[0.625rem] font-semibold text-amber-400">A REVISAR</span>}
                                   </th>
                                 ))}
                               </tr>
@@ -540,7 +549,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                     <td key={v.vendedor} className={`${dato} py-2 px-3 text-right whitespace-nowrap ${f.fuerte ? 'font-semibold text-white' : ''}`}>
                                       {formatoPrecio(v[f.key])}
                                       {f.key === 'cargo_gestion' && v.pct_fee !== null && (
-                                        <span className="text-[10px] text-slate-400"> ({v.pct_fee.toFixed(1)}%)</span>
+                                        <span className="text-[0.6875rem] text-slate-400"> ({v.pct_fee.toFixed(1)}%)</span>
                                       )}
                                     </td>
                                   ))}
@@ -575,7 +584,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
                         {mejora && (
                           <div className="overflow-x-auto rounded-xl border border-white/10 bg-[color:var(--surf)]">
-                            <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wide text-slate-400">
+                            <div className="px-3 pt-3 pb-1 text-[0.6875rem] uppercase tracking-wide text-slate-400">
                               Margen de mejora del fee · fee actual {formatoPrecio(mejora.fee_actual_monto)} ({mejora.fee_actual_pct.toFixed(1)}%) · piso {PISO_FEE_PCT}% = {formatoPrecio(mejora.fee_piso_monto)} · bajable sin pérdida {formatoPrecio(mejora.margen_monto)} ({mejora.margen_pct.toFixed(1)} pp)
                             </div>
                             {mejora.bajo_piso && (
@@ -606,7 +615,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                       <td className={`${dato} py-2 px-3 text-right`}>{formatoGapPct(m.diferencia_pct)} ({formatoGapMonto(m.diferencia_monto)})</td>
                                       <td className={`${dato} py-2 px-3 text-right`}>{m.estado === 'GANANDO' ? '-' : `-${m.mejora_pct_fee.toFixed(1)} pp`}</td>
                                       <td className={`${dato} py-2 px-3 text-right`}>{m.estado === 'GANANDO' ? '-' : formatoPrecio(m.mejora_monto)}</td>
-                                      <td className={`${dato} py-2 px-3 text-right ${m.residuo_monto > 0 ? 'text-rose-300' : ''}`}>{m.residuo_monto > 0 ? <>{formatoPrecio(m.residuo_monto)}{m.residuo_pct_tarifa !== null && <span className="text-[10px] text-slate-400"> ({m.residuo_pct_tarifa.toFixed(1)}% de la tarifa base)</span>}</> : '-'}</td>
+                                      <td className={`${dato} py-2 px-3 text-right ${m.residuo_monto > 0 ? 'text-rose-300' : ''}`}>{m.residuo_monto > 0 ? <>{formatoPrecio(m.residuo_monto)}{m.residuo_pct_tarifa !== null && <span className="text-[0.6875rem] text-slate-400"> ({m.residuo_pct_tarifa.toFixed(1)}% de la tarifa base)</span>}</> : '-'}</td>
                                       <td className={`py-2 px-3 font-semibold ${acentoPorEstado[m.estado].text}`}>{acentoPorEstado[m.estado].label}</td>
                                     </tr>
                                   ))}

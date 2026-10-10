@@ -17,6 +17,8 @@ interface Props {
   hrefHistorial?: string;
   // Hora de la lectura mas reciente en la base (ej. '03/10 03:01')
   actualizado?: string | null;
+  // Horas desde la lectura mas reciente: define el color del indicador de frescura
+  horasDesdeActualizacion?: number | null;
 }
 
 const heading = '[font-family:var(--font-heading)]';
@@ -29,8 +31,11 @@ export default function AppHeader({
   hrefMatriz,
   hrefGraficos,
   hrefHistorial = '/historial',
-  actualizado
+  actualizado,
+  horasDesdeActualizacion = null
 }: Props) {
+  // Verde si los datos son recientes, ambar si pasaron mas de 36 h (mismo umbral que /api/salud).
+  const frescura = horasDesdeActualizacion === null ? 'bg-slate-500' : horasDesdeActualizacion > 36 ? 'bg-amber-400' : 'bg-emerald-400';
   const tabs: { id: Seccion; label: string; href: string }[] = [
     { id: 'matriz', label: 'Matriz Almundo', href: hrefMatriz },
     { id: 'graficos', label: 'Gráficos & KPIs', href: hrefGraficos },
@@ -41,10 +46,7 @@ export default function AppHeader({
     <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-white/10 pb-6">
       <div>
         <div className="flex items-center gap-2 text-[11px] text-slate-400">
-          <span className="relative flex h-2 w-2" aria-hidden="true">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-[color:var(--acc)] opacity-60 animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--acc)]" />
-          </span>
+          <span aria-hidden="true" className={`inline-flex h-2 w-2 rounded-full ${frescura}`} />
           <span>{estado}</span>
           {actualizado && (
             <span className="ml-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-slate-300">

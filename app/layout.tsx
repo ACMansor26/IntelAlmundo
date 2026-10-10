@@ -2,6 +2,8 @@
 import type { Metadata } from 'next';
 import { Montserrat } from 'next/font/google';
 import './globals.css';
+import { Suspense } from 'react';
+import ProgresoNavegacion from '@/components/ProgresoNavegacion';
 
 export const metadata: Metadata = {
   title: 'Almundo | Inteligencia de Precios & Revenue Management',
@@ -26,6 +28,9 @@ export default function RootLayout({
     <html lang="es" className={fontBase.variable}>
       <body className="text-slate-100 antialiased">
         <a href="#contenido" className="skip-link">Saltar al contenido</a>
+        <Suspense fallback={null}>
+          <ProgresoNavegacion />
+        </Suspense>
         <div id="contenido">{children}</div>
       </body>
     </html>

@@ -1769,6 +1769,7 @@ export async function getConteosFiltros(...args: Parameters<typeof getConteosFil
 // ==============================================================================
 export interface InfoActualizacion {
   ultima: string | null;          // 'dd/mm HH:MM' de la lectura mas reciente
+  horas: number | null;           // horas transcurridas desde esa lectura (frescura)
   fechas: string[];               // dias con datos, mas reciente primero (YYYY-MM-DD)
   // Fuentes cuyo ultimo dato es de un dia anterior al mas reciente: no entran en
   // "Ultima ejecucion" (ultima = 'dd/mm' de su ultimo dato).
@@ -1778,7 +1779,7 @@ export interface InfoActualizacion {
 async function getInfoActualizacion_raw(): Promise<InfoActualizacion> {
   try {
     const [u, f, fu] = await Promise.all([
-      pool.query(`SELECT TO_CHAR(MAX(fecha_obtencion), 'DD/MM HH24:MI') AS ultima FROM precios_vuelos`),
+      pool.query(`SELECT TO_CHAR(MAX(fecha_obtencion), 'DD/MM HH24:MI') AS ultima, EXTRACT(EPOCH FROM (now() - MAX(fecha_obtencion))) / 3600 AS horas FROM precios_vuelos`),
       pool.query(`SELECT DISTINCT TO_CHAR(fecha_obtencion::date, 'YYYY-MM-DD') AS fecha FROM precios_vuelos ORDER BY fecha DESC LIMIT 30`),
       pool.query(`SELECT fuente, MAX(fecha_obtencion::date) AS dia, TO_CHAR(MAX(fecha_obtencion::date), 'DD/MM') AS ultima
                   FROM precios_vuelos GROUP BY fuente ORDER BY fuente`)
@@ -1787,9 +1788,9 @@ async function getInfoActualizacion_raw(): Promise<InfoActualizacion> {
     const fuentesAtrasadas = fu.rows
       .filter(r => new Date(r.dia).getTime() < diaMax)
       .map(r => ({ fuente: r.fuente as string, ultima: r.ultima as string }));
-    return { ultima: u.rows[0]?.ultima ?? null, fechas: f.rows.map(r => r.fecha), fuentesAtrasadas };
+    return { ultima: u.rows[0]?.ultima ?? null, horas: u.rows[0]?.horas === null || u.rows[0]?.horas === undefined ? null : Number(u.rows[0].horas), fechas: f.rows.map(r => r.fecha), fuentesAtrasadas };
   } catch {
-    return { ultima: null, fechas: [], fuentesAtrasadas: [] };
+    return { ultima: null, horas: null, fechas: [], fuentesAtrasadas: [] };
   }
 }
 
