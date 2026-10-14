@@ -126,7 +126,7 @@ export default function BarraFiltros(props: Props) {
   // filtros estan activos sin tener que leer cada chip.
   const activo = (valor: string) => valor !== 'TODAS' && valor !== 'TODOS';
   const claseChip = (esActivo: boolean) =>
-    `flex items-center justify-between sm:justify-start gap-2 border rounded-lg px-3 py-2 transition-colors ${
+    `flex items-center justify-between gap-2 min-w-0 border rounded-lg px-3 py-2 transition-colors ${
       esActivo ? 'bg-[color:var(--acc)]/[0.06] border-[color:var(--acc)]/40' : 'bg-[color:var(--sunk2)] border-white/10'
     }`;
 
@@ -222,14 +222,14 @@ export default function BarraFiltros(props: Props) {
   // resto de los controles según el sistema operativo/navegador del usuario.
   const claseSelect =
     'appearance-none bg-[color:var(--sunk)] border border-white/10 text-slate-200 text-xs rounded-md ' +
-    'pl-2.5 pr-7 py-1 focus:border-[color:var(--acc)] transition-colors cursor-pointer min-h-8';
+    'pl-2.5 pr-7 py-1 focus:border-[color:var(--acc)] transition-colors cursor-pointer min-h-8 w-full truncate';
 
 
   return (
     <div className="barra-sticky z-30 rounded-2xl border border-white/10 bg-[color:var(--surf)] p-3 space-y-3 [@media(min-height:900px)]:xl:sticky [@media(min-height:900px)]:xl:top-3 [@media(min-height:900px)]:xl:shadow-lg [@media(min-height:900px)]:xl:shadow-black/30">
 
-      {/* Fila 1: Moneda, Tipo de Vuelo, Metabuscador */}
-      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-2 sm:gap-3">
+      {/* Fila 1: Moneda, Tipo de Vuelo, Comparar vs, Datos */}
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-[auto_auto_minmax(0,1fr)_minmax(0,1fr)] items-stretch gap-2 sm:gap-3">
 
         {/* Moneda */}
         <div className={claseChip(false)}>
@@ -280,31 +280,10 @@ export default function BarraFiltros(props: Props) {
           </div>
         </div>
 
-        {/* Filtro: Metabuscador */}
-        <div className={claseChip(activo(fuenteAct))}>
-          <label htmlFor="select-fuente" className="text-[11px] font-medium text-slate-400">Metabuscador</label>
-          <div className="relative">
-            <select
-              id="select-fuente"
-              value={fuenteAct}
-              onChange={(e) => actualizarFiltro('fuente', e.target.value)}
-              className={claseSelect}
-            >
-              <option value="TODAS">Todos los Metas</option>
-              {listaFuentes.map((f) => (
-                <option key={f} value={f}>
-                  {conCantidad(f, f, props.conteoFuentes)}
-                </option>
-              ))}
-            </select>
-            <Flecha />
-          </div>
-        </div>
-
         {/* Filtro: Competidor a comparar (1-a-1 vs. Almundo) */}
         <div className={claseChip(competidorAct !== competidorDefault)}>
           <label htmlFor="select-competidor" className="text-[11px] font-medium text-slate-400">Comparar vs</label>
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               id="select-competidor"
               value={competidorAct}
@@ -323,7 +302,7 @@ export default function BarraFiltros(props: Props) {
         {/* Filtro: corrida de datos (por defecto, la mas reciente de cada fuente) */}
         <div className={claseChip(fechaAct !== 'ULTIMA')}>
           <label htmlFor="select-fecha" className="text-[11px] font-medium text-slate-400">Datos</label>
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               id="select-fecha"
               value={fechaAct}
@@ -341,13 +320,34 @@ export default function BarraFiltros(props: Props) {
         </div>
       </div>
 
-      {/* Fila 2: Ruta, Región, Aerolínea */}
-      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap items-stretch sm:items-center sm:justify-center gap-2 sm:gap-3">
+      {/* Fila 2: Metabuscador, Ruta, Región, Aerolínea */}
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 items-stretch gap-2 sm:gap-3">
+
+        {/* Filtro: Metabuscador */}
+        <div className={claseChip(activo(fuenteAct))}>
+          <label htmlFor="select-fuente" className="text-[11px] font-medium text-slate-400">Metabuscador</label>
+          <div className="relative min-w-0 flex-1">
+            <select
+              id="select-fuente"
+              value={fuenteAct}
+              onChange={(e) => actualizarFiltro('fuente', e.target.value)}
+              className={claseSelect}
+            >
+              <option value="TODAS">Todos los Metas</option>
+              {listaFuentes.map((f) => (
+                <option key={f} value={f}>
+                  {conCantidad(f, f, props.conteoFuentes)}
+                </option>
+              ))}
+            </select>
+            <Flecha />
+          </div>
+        </div>
 
         {/* Filtro: Ruta */}
         <div className={claseChip(activo(rutaAct))}>
           <label htmlFor="select-ruta" className="text-[11px] font-medium text-slate-400">Ruta</label>
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               id="select-ruta"
               value={rutaAct}
@@ -368,7 +368,7 @@ export default function BarraFiltros(props: Props) {
         {/* Filtro: Region — antes llegaba como prop y no se usaba */}
         <div className={claseChip(activo(regionAct))}>
           <label htmlFor="select-region" className="text-[11px] font-medium text-slate-400">Región</label>
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               id="select-region"
               value={regionAct}
@@ -389,7 +389,7 @@ export default function BarraFiltros(props: Props) {
         {/* Filtro: Aerolinea */}
         <div className={claseChip(activo(aeroAct))}>
           <label htmlFor="select-aero" className="text-[11px] font-medium text-slate-400">Aerolínea</label>
-          <div className="relative">
+          <div className="relative min-w-0 flex-1">
             <select
               id="select-aero"
               value={aeroAct}
