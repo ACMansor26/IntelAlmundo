@@ -2,6 +2,7 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import { unstable_cache } from 'next/cache';
+import { COLUMNAS_PRECIOS_VUELOS } from './esquema';
 import { PISO_FEE_PCT, TOLERANCIA_REDONDEO_FEE, UMBRAL_ALERTA_TARIFA_PCT } from './mejora';
 
 // ==============================================================================
@@ -313,6 +314,21 @@ const MIN_VENDEDORES_COMPARACION = 2;
 // particion); no cambian los grupos porque dependen del id_pareja_vuelo. Asi las
 // consultas con filtro de moneda/ruta no calculan las ventanas sobre toda la tabla.
 const PARTICION_VUELO = 'p.id_pareja_vuelo, p.fuente, p.fecha_obtencion::date, p.moneda, p.ruta, p.region, p.tipo_vuelo';
+// Filas utilizables por el dashboard: con checkout (precio_total) y con fecha de lectura. La tabla
+// puede recibir tambien listados sin checkout o filas sin fecha; se ignoran para no vaciar
+// "Ultima ejecucion" ni romper los filtros (ultima corrida = ultima con checkout).
+// Utilizable = con checkout, fecha, ruta, moneda y horario (datos descriptivos) y con forma de
+// obtener el precio sin fee (columna propia o total - cargo de gestion). Hay cargas parciales
+// (ej. Kayak 03-05/11: solo precio total, sin aerolinea/ruta/horario/fee) que dejarian cards
+// vacias y filtros sin cantidades; no cuentan como datos ni como "ultima corrida".
+function validas(alias?: string): string {
+  const p = alias ? `${alias}.` : '';
+  return `${p}precio_total IS NOT NULL AND ${p}fecha_obtencion IS NOT NULL AND ${p}ruta IS NOT NULL AND ${p}moneda IS NOT NULL AND ${p}hora_salida_ida IS NOT NULL AND (${p}precio_sin_fee IS NOT NULL OR ${p}cargo_gestion IS NOT NULL)`;
+}
+const FILAS_VALIDAS = validas();
+// Columnas que lee el dashboard (contrato de esquema) + las del detalle; precio_sin_fee se
+// recalcula abajo (si viene vacio: precio_total - cargo_gestion).
+const COLUMNAS_VISTA = [...COLUMNAS_PRECIOS_VUELOS, 'id', 'cargos'].filter((c, i, a) => c !== 'precio_sin_fee' && a.indexOf(c) === i);
 const VISTA_PRECIOS = `(
   SELECT v.*,
     CASE WHEN v.n_validos >= ${MIN_VENDEDORES_COMPARACION} THEN (v.precio_sin_fee - v.min_sin_fee) END AS gap_min_monto,
@@ -321,15 +337,20 @@ const VISTA_PRECIOS = `(
   FROM (
     SELECT p.*,
       (ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) > ${UMBRAL_A_REVISAR_PCT}) AS a_revisar,
-      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x)) AS es_ultima_corrida,
-      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE x.fuente = p.fuente)) AS es_ultima_fuente,
+      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE ${validas('x')})) AS es_ultima_corrida,
+      (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE ${validas('x')} AND x.fuente = p.fuente)) AS es_ultima_fuente,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_sin_fee END)
         OVER (PARTITION BY ${PARTICION_VUELO}) AS min_sin_fee,
       MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_total END)
         OVER (PARTITION BY ${PARTICION_VUELO}) AS min_total,
       COUNT(*) FILTER (WHERE ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT})
         OVER (PARTITION BY ${PARTICION_VUELO}) AS n_validos
-    FROM precios_vuelos p
+    FROM (
+      SELECT ${COLUMNAS_VISTA.map(c => `t.${c}`).join(', ')},
+        COALESCE(t.precio_sin_fee, t.precio_total - t.cargo_gestion) AS precio_sin_fee
+      FROM precios_vuelos t
+      WHERE ${validas('t')}
+    ) p
   ) v
 ) pv`;
 // Clave de "vuelo observado": mismo id_pareja_vuelo en distinta fuente = lectura distinta.
@@ -1482,7 +1503,7 @@ const COMPETIDORES_FALLBACK = ['Despegar', 'Atrápalo'];
 // AEROLINEA), que se trata aparte en todos los graficos.
 async function getCompetidoresDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
-    const whereClauses = [`vendedor != 'Almundo'`, `tipo_vendedor != 'AEROLINEA'`];
+    const whereClauses = [`vendedor != 'Almundo'`, `tipo_vendedor != 'AEROLINEA'`, FILAS_VALIDAS];
     const params: ParamSql[] = [];
     if (moneda && moneda !== 'TODAS') {
       params.push(moneda);
@@ -1493,28 +1514,28 @@ async function getCompetidoresDisponibles_raw(moneda?: string): Promise<string[]
       params
     );
     return res.rows.length > 0 ? res.rows.map(r => r.vendedor) : COMPETIDORES_FALLBACK;
-  } catch {
-    return COMPETIDORES_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 async function getFuentesDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
-    const clause = moneda && moneda !== 'TODAS' ? 'WHERE moneda = $1' : '';
+    const clause = moneda && moneda !== 'TODAS' ? `WHERE moneda = $1 AND ${FILAS_VALIDAS}` : `WHERE ${FILAS_VALIDAS}`;
     const params = moneda && moneda !== 'TODAS' ? [moneda] : [];
     const res = await pool.query(
       `SELECT DISTINCT fuente FROM precios_vuelos ${clause} ORDER BY fuente ASC;`,
       params
     );
     return res.rows.length > 0 ? res.rows.map(r => r.fuente) : FUENTES_FALLBACK;
-  } catch {
-    return FUENTES_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 async function getAerolineasDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
-    const clause = moneda && moneda !== 'TODAS' ? 'WHERE moneda = $1' : '';
+    const clause = moneda && moneda !== 'TODAS' ? `WHERE moneda = $1 AND ${FILAS_VALIDAS}` : `WHERE ${FILAS_VALIDAS}`;
     const params = moneda && moneda !== 'TODAS' ? [moneda] : [];
     const res = await pool.query(
       `SELECT DISTINCT ${exprAerolineaPrincipal()} AS aerolinea FROM precios_vuelos ${clause};`,
@@ -1528,28 +1549,28 @@ async function getAerolineasDisponibles_raw(moneda?: string): Promise<string[]> 
     const ordenadas = AEROLINEAS_PRINCIPALES.filter(a => presentes.has(a));
     if (presentes.has('OTRAS')) ordenadas.push('OTRAS');
     return ordenadas;
-  } catch {
-    return AEROLINEAS_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 async function getRutasDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
-    const clause = moneda && moneda !== 'TODAS' ? 'WHERE moneda = $1' : '';
+    const clause = moneda && moneda !== 'TODAS' ? `WHERE moneda = $1 AND ${FILAS_VALIDAS}` : `WHERE ${FILAS_VALIDAS}`;
     const params = moneda && moneda !== 'TODAS' ? [moneda] : [];
     const res = await pool.query(
       `SELECT DISTINCT ruta FROM precios_vuelos ${clause} ORDER BY ruta ASC;`,
       params
     );
     return res.rows.length > 0 ? res.rows.map(r => r.ruta) : RUTAS_FALLBACK;
-  } catch {
-    return RUTAS_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 async function getRegionesDisponibles_raw(moneda?: string, tipo_vuelo?: string): Promise<string[]> {
   try {
-    const clauses: string[] = [];
+    const clauses: string[] = [FILAS_VALIDAS];
     const params: ParamSql[] = [];
     if (moneda && moneda !== 'TODAS') {
       params.push(moneda);
@@ -1565,22 +1586,22 @@ async function getRegionesDisponibles_raw(moneda?: string, tipo_vuelo?: string):
       params
     );
     return res.rows.length > 0 ? res.rows.map(r => r.region) : REGIONES_FALLBACK;
-  } catch {
-    return REGIONES_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 async function getTiposVueloDisponibles_raw(moneda?: string): Promise<string[]> {
   try {
-    const clause = moneda && moneda !== 'TODAS' ? 'WHERE moneda = $1' : '';
+    const clause = moneda && moneda !== 'TODAS' ? `WHERE moneda = $1 AND ${FILAS_VALIDAS}` : `WHERE ${FILAS_VALIDAS}`;
     const params = moneda && moneda !== 'TODAS' ? [moneda] : [];
     const res = await pool.query(
       `SELECT DISTINCT tipo_vuelo FROM precios_vuelos ${clause} ORDER BY tipo_vuelo ASC;`,
       params
     );
     return res.rows.length > 0 ? res.rows.map(r => r.tipo_vuelo) : TIPOS_VUELO_FALLBACK;
-  } catch {
-    return TIPOS_VUELO_FALLBACK;
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
@@ -1779,27 +1800,39 @@ export interface InfoActualizacion {
 async function getInfoActualizacion_raw(): Promise<InfoActualizacion> {
   try {
     const [u, f, fu] = await Promise.all([
-      pool.query(`SELECT TO_CHAR(MAX(fecha_obtencion), 'DD/MM HH24:MI') AS ultima, EXTRACT(EPOCH FROM (now() - MAX(fecha_obtencion))) / 3600 AS horas FROM precios_vuelos`),
-      pool.query(`SELECT DISTINCT TO_CHAR(fecha_obtencion::date, 'YYYY-MM-DD') AS fecha FROM precios_vuelos ORDER BY fecha DESC LIMIT 30`),
+      pool.query(`SELECT TO_CHAR(MAX(fecha_obtencion), 'DD/MM HH24:MI') AS ultima, EXTRACT(EPOCH FROM (now() - MAX(fecha_obtencion))) / 3600 AS horas FROM precios_vuelos WHERE ${FILAS_VALIDAS}`),
+      pool.query(`SELECT DISTINCT TO_CHAR(fecha_obtencion::date, 'YYYY-MM-DD') AS fecha FROM precios_vuelos WHERE ${FILAS_VALIDAS} ORDER BY fecha DESC LIMIT 30`),
       pool.query(`SELECT fuente, MAX(fecha_obtencion::date) AS dia, TO_CHAR(MAX(fecha_obtencion::date), 'DD/MM') AS ultima
-                  FROM precios_vuelos GROUP BY fuente ORDER BY fuente`)
+                  FROM precios_vuelos WHERE ${FILAS_VALIDAS} AND fuente IS NOT NULL GROUP BY fuente ORDER BY fuente`)
     ]);
     const diaMax = fu.rows.reduce((m: number, r) => Math.max(m, new Date(r.dia).getTime()), 0);
     const fuentesAtrasadas = fu.rows
       .filter(r => new Date(r.dia).getTime() < diaMax)
       .map(r => ({ fuente: r.fuente as string, ultima: r.ultima as string }));
     return { ultima: u.rows[0]?.ultima ?? null, horas: u.rows[0]?.horas === null || u.rows[0]?.horas === undefined ? null : Number(u.rows[0].horas), fechas: f.rows.map(r => r.fecha), fuentesAtrasadas };
-  } catch {
-    return { ultima: null, horas: null, fechas: [], fuentesAtrasadas: [] };
+  } catch (err) {
+    throw err; // el wrapper devuelve el respaldo sin cachearlo
   }
 }
 
 // Listas de opciones de los filtros y frescura: cambian solo con cada corrida.
 const CACHE_LISTAS_SEG = 600;
-export const getCompetidoresDisponibles = unstable_cache(getCompetidoresDisponibles_raw, ['getCompetidoresDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getFuentesDisponibles = unstable_cache(getFuentesDisponibles_raw, ['getFuentesDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getAerolineasDisponibles = unstable_cache(getAerolineasDisponibles_raw, ['getAerolineasDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getRutasDisponibles = unstable_cache(getRutasDisponibles_raw, ['getRutasDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getRegionesDisponibles = unstable_cache(getRegionesDisponibles_raw, ['getRegionesDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getTiposVueloDisponibles = unstable_cache(getTiposVueloDisponibles_raw, ['getTiposVueloDisponibles'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
-export const getInfoActualizacion = unstable_cache(getInfoActualizacion_raw, ['getInfoActualizacion'], { revalidate: CACHE_LISTAS_SEG, tags: TAG });
+// Si la consulta falla se devuelve el respaldo pero NO se cachea (unstable_cache no guarda excepciones).
+function conRespaldo<A extends unknown[], T>(fn: (...a: A) => Promise<T>, respaldo: T) {
+  return async (...a: A): Promise<T> => {
+    try {
+      return await fn(...a);
+    } catch (err) {
+      console.error('Error en consulta de filtros (se usa el respaldo):', err);
+      return respaldo;
+    }
+  };
+}
+const opcionesLista = { revalidate: CACHE_LISTAS_SEG, tags: TAG };
+export const getCompetidoresDisponibles = conRespaldo(unstable_cache(getCompetidoresDisponibles_raw, ['getCompetidoresDisponibles'], opcionesLista), COMPETIDORES_FALLBACK);
+export const getFuentesDisponibles = conRespaldo(unstable_cache(getFuentesDisponibles_raw, ['getFuentesDisponibles'], opcionesLista), FUENTES_FALLBACK);
+export const getAerolineasDisponibles = conRespaldo(unstable_cache(getAerolineasDisponibles_raw, ['getAerolineasDisponibles'], opcionesLista), AEROLINEAS_FALLBACK);
+export const getRutasDisponibles = conRespaldo(unstable_cache(getRutasDisponibles_raw, ['getRutasDisponibles'], opcionesLista), RUTAS_FALLBACK);
+export const getRegionesDisponibles = conRespaldo(unstable_cache(getRegionesDisponibles_raw, ['getRegionesDisponibles'], opcionesLista), REGIONES_FALLBACK);
+export const getTiposVueloDisponibles = conRespaldo(unstable_cache(getTiposVueloDisponibles_raw, ['getTiposVueloDisponibles'], opcionesLista), TIPOS_VUELO_FALLBACK);
+export const getInfoActualizacion = conRespaldo(unstable_cache(getInfoActualizacion_raw, ['getInfoActualizacion'], opcionesLista), { ultima: null, horas: null, fechas: [], fuentesAtrasadas: [] } as InfoActualizacion);

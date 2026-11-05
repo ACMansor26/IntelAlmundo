@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     // 2. Frescura de los datos.
     if (estado !== 'error') {
       const f = await pool.query(
-        `SELECT EXTRACT(EPOCH FROM (now() - MAX(fecha_obtencion))) / 3600 AS horas FROM precios_vuelos`
+        `SELECT EXTRACT(EPOCH FROM (now() - MAX(fecha_obtencion))) / 3600 AS horas FROM precios_vuelos WHERE precio_total IS NOT NULL AND fecha_obtencion IS NOT NULL`
       );
       const horas = f.rows[0]?.horas === null || f.rows[0]?.horas === undefined ? null : Number(f.rows[0].horas);
       if (horas === null) {

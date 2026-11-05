@@ -31,7 +31,7 @@ function fila(o: Fila): Fila {
     fecha_obtencion: '2026-10-03 10:00:00',
     ...o,
     // derivados coherentes con el desglose del checkout
-    precio_total: o.precio_total ?? Number(o.precio_sin_fee) + Number(o.cargo_gestion ?? 0),
+    precio_total: 'precio_total' in o ? o.precio_total : Number(o.precio_sin_fee) + Number(o.cargo_gestion ?? 0),
     precio_listado_vendedor: o.precio_listado_vendedor ?? Number(o.precio_sin_fee) + Number(o.cargo_gestion ?? 0)
   };
 }
@@ -45,6 +45,13 @@ const IDU = (n: string) => `AEP-COR_2026-10-17-${n}_2026-10-24-0800_AP15D_7D_USD
 // F3 (TurismoCity, AR): checkout de Almundo 12% sobre el listado -> "a revisar" (se excluye); Despegar 900.
 // F4 (Kayak, 02/10): corrida vieja, solo aparece con fecha 02/10 o "TODAS".
 const FILAS: Fila[] = [
+  // Ruido que la tabla puede recibir y el dashboard debe ignorar: un listado SIN checkout de un dia
+  // posterior (no puede volverse "ultima corrida") y una lectura sin fecha ni fuente.
+  fila({ id_pareja_vuelo: ID('1900'), hora_salida_ida: '19:00', vendedor: 'Almundo', precio_sin_fee: 777, precio_total: null, fecha_obtencion: '2026-10-04 09:00:00' }),
+  fila({ id_pareja_vuelo: ID('1900'), hora_salida_ida: '19:00', vendedor: 'Despegar', precio_sin_fee: 700, precio_total: null, fecha_obtencion: '2026-10-04 09:00:00' }),
+  // Carga parcial (como Kayak 03-05/11): solo precio total; sin ruta, aerolinea, horario ni fee. Es del dia mas reciente.
+  fila({ id_pareja_vuelo: ID('2100'), vendedor: 'Almundo', ruta: null, aerolinea_ida: null, hora_salida_ida: null, cargo_gestion: null, precio_sin_fee: null, precio_total: 999, fecha_obtencion: '2026-10-05 09:00:00' }),
+  fila({ id_pareja_vuelo: ID('2000'), fuente: null, vendedor: 'atrapalo', precio_sin_fee: null, precio_total: null, fecha_obtencion: null }),
   fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Almundo', tarifa_base: 600, precio_sin_fee: 1000, cargo_gestion: 100, pct_fee: 10 }),
   fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Despegar', tarifa_base: 500, precio_sin_fee: 900, cargos: 60 }),
   fila({ id_pareja_vuelo: ID('0600'), vendedor: 'Atrápalo', tarifa_base: 520, precio_sin_fee: 950, cargo_gestion: 50, pct_fee: 5.3 }),
@@ -263,5 +270,18 @@ describe.skipIf(!url)('consultas del dashboard contra datos de ejemplo', () => {
     expect(corridas[0]).toMatchObject({ fuente: 'Kayak', jobs_totales: 2 });
     const detalle = await data.getDetalleCorrida(1);
     expect(detalle[0]).toMatchObject({ aerolinea: 'JetSmart', tiene_atrapalo: true, vendedores: ['Almundo', 'Despegar', 'Atrápalo'] });
+  });
+
+  it('filas sin checkout o sin fecha: no definen la ultima corrida ni ensucian los filtros', async () => {
+    const info = await data.getInfoActualizacion();
+    expect(info.fechas.every((f) => typeof f === 'string')).toBe(true);
+    expect(info.fechas[0]).toBe('2026-10-03'); // el 04/10 es un listado sin checkout y el 05/10 una carga parcial
+    expect(info.ultima?.startsWith('03/10')).toBe(true);
+    expect(info.fuentesAtrasadas.every((x) => x.fuente !== null)).toBe(true);
+    for (const lista of [await data.getFuentesDisponibles('ARS'), await data.getRutasDisponibles('ARS'), await data.getRegionesDisponibles('ARS')]) {
+      expect(lista.every((x) => typeof x === 'string' && x.length > 0)).toBe(true);
+    }
+    // "Ultima ejecucion" sigue devolviendo los vuelos del 03/10, no el listado vacio del 04/10.
+    expect((await data.getResumenKPIs({ ...base, fecha: 'ULTIMA' })).total_vuelos_unicos).toBe(4);
   });
 });
