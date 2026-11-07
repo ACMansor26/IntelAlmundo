@@ -342,14 +342,14 @@ const VISTA_PRECIOS = `(
          THEN (v.precio_sin_fee - v.min_sin_fee) * 100.0 / NULLIF(v.min_sin_fee, 0) END AS gap_min_pct
   FROM (
     SELECT p.*,
-      (ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) > ${UMBRAL_A_REVISAR_PCT}) AS a_revisar,
+      (ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) > ${UMBRAL_A_REVISAR_PCT} OR p.itinerario_valido IS FALSE) AS a_revisar,
       (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE ${validas('x')})) AS es_ultima_corrida,
       (p.fecha_obtencion::date = (SELECT MAX(x.fecha_obtencion::date) FROM precios_vuelos x WHERE ${validas('x')} AND x.fuente = p.fuente)) AS es_ultima_fuente,
-      MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_sin_fee END)
+      MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} AND p.itinerario_valido IS NOT FALSE THEN p.precio_sin_fee END)
         OVER (PARTITION BY ${PARTICION_VUELO}) AS min_sin_fee,
-      MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} THEN p.precio_total END)
+      MIN(CASE WHEN ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} AND p.itinerario_valido IS NOT FALSE THEN p.precio_total END)
         OVER (PARTITION BY ${PARTICION_VUELO}) AS min_total,
-      COUNT(*) FILTER (WHERE ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT})
+      COUNT(*) FILTER (WHERE ABS(COALESCE(p.pct_dif_checkout_vs_listado, 0)) <= ${UMBRAL_A_REVISAR_PCT} AND p.itinerario_valido IS NOT FALSE)
         OVER (PARTITION BY ${PARTICION_VUELO}) AS n_validos
     FROM (
       SELECT ${COLUMNAS_VISTA.map(c => `t.${c}`).join(', ')},

@@ -13,7 +13,7 @@ export const COLUMNAS_PRECIOS_VUELOS = [
   'equipaje_mochila', 'equipaje_mano', 'equipaje_bodega',
   'tarifa_base', 'impuestos', 'tasas', 'cargos', 'cargo_gestion', 'precio_total', 'precio_sin_fee', 'pct_fee',
   'precio_listado_vendedor', 'dif_checkout_vs_listado', 'pct_dif_checkout_vs_listado',
-  'fecha_obtencion'
+  'fecha_obtencion', 'itinerario_valido'
 ] as const;
 
 export const COLUMNAS_SCRAPER_RUNS = [
