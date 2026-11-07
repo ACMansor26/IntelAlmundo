@@ -500,6 +500,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                                 </div>
                               </div>
                             ))}
+                            {(['numero_vuelo_ida', 'numero_vuelo_vuelta'] as const).some((k) =>
+                              new Set(vendedores.map((v) => v[k]).filter(Boolean)).size > 1) && (
+                              <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-2.5 text-[11px] text-amber-300">
+                                Los vendedores listan números de vuelo distintos para este itinerario (posible vuelo mal emparejado):
+                                {(['numero_vuelo_ida', 'numero_vuelo_vuelta'] as const).map((k) => (
+                                  <div key={k} className={dato}>
+                                    {k === 'numero_vuelo_ida' ? 'Ida' : 'Vuelta'}:{' '}
+                                    {vendedores.map((v) => `${v.vendedor} ${v[k] ?? 'N/D'}`).join(' · ')}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className={`${dato} text-slate-300`}>
                               Anticipación <span className="font-semibold text-white">{item.dias_anticipacion}d</span>
                               <span className="text-slate-400"> · </span>
@@ -508,10 +520,23 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                           </div>
                           <div>
                             <div className="text-[0.6875rem] uppercase tracking-wide text-slate-400 mb-1">Equipaje</div>
-                            <div className="text-slate-300 space-y-0.5">
-                              <div>Mochila: <span className="text-slate-400">{si(item.equipaje_mochila)}</span></div>
-                              <div>Mano: <span className="text-slate-400">{si(item.equipaje_mano)}</span></div>
-                              <div>Bodega: <span className="text-slate-400">{si(item.equipaje_bodega)}</span></div>
+                            <div className="text-slate-300 space-y-1">
+                              {vendedores.length === 0 && (
+                                <>
+                                  <div>Mochila: <span className="text-slate-400">{si(item.equipaje_mochila)}</span></div>
+                                  <div>Mano: <span className="text-slate-400">{si(item.equipaje_mano)}</span></div>
+                                  <div>Bodega: <span className="text-slate-400">{si(item.equipaje_bodega)}</span></div>
+                                </>
+                              )}
+                              {/* El equipaje depende de la tarifa de cada vendedor: se muestra por vendedor */}
+                              {vendedores.map((v) => (
+                                <div key={v.vendedor}>
+                                  <span className="text-slate-200">{v.vendedor}:</span>{' '}
+                                  <span className="text-slate-400">
+                                    Mochila {si(v.equipaje_mochila)} · Mano {si(v.equipaje_mano)} · Bodega {si(v.equipaje_bodega)}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                           <div>

@@ -73,6 +73,12 @@ export interface DetalleVendedor {
   pct_dif_checkout_vs_listado: number | null;
   a_revisar: boolean;
   es_mas_barato: boolean;
+  // Datos del vuelo según ESTE vendedor (pueden diferir entre vendedores de un mismo vuelo)
+  numero_vuelo_ida: string | null;
+  numero_vuelo_vuelta: string | null;
+  equipaje_mochila: string | null;
+  equipaje_mano: string | null;
+  equipaje_bodega: string | null;
 }
 
 export interface ItinerarioAlmundo {
@@ -737,7 +743,8 @@ async function getTablaItinerariosAlmundo_sinCache(
         `
         SELECT id_pareja_vuelo, fuente, vendedor, tarifa_base, impuestos, tasas, cargos, cargo_gestion,
                pct_fee, precio_sin_fee, precio_total, precio_listado_vendedor,
-               dif_checkout_vs_listado, pct_dif_checkout_vs_listado, a_revisar, min_sin_fee, n_validos
+               dif_checkout_vs_listado, pct_dif_checkout_vs_listado, a_revisar, min_sin_fee, n_validos,
+               numero_vuelo_ida, numero_vuelo_vuelta, equipaje_mochila, equipaje_mano, equipaje_bodega
         FROM ${VISTA_PRECIOS}
         WHERE (id_pareja_vuelo, fuente) IN (SELECT unnest($1::text[]), unnest($2::text[]))
         ORDER BY CASE vendedor WHEN 'Almundo' THEN 1 WHEN 'Despegar' THEN 2 WHEN 'Atrápalo' THEN 3 ELSE 4 END, vendedor
@@ -761,6 +768,11 @@ async function getTablaItinerariosAlmundo_sinCache(
           dif_checkout_vs_listado: num(d.dif_checkout_vs_listado),
           pct_dif_checkout_vs_listado: num(d.pct_dif_checkout_vs_listado),
           a_revisar: Boolean(d.a_revisar),
+          numero_vuelo_ida: d.numero_vuelo_ida || null,
+          numero_vuelo_vuelta: d.numero_vuelo_vuelta || null,
+          equipaje_mochila: d.equipaje_mochila || null,
+          equipaje_mano: d.equipaje_mano || null,
+          equipaje_bodega: d.equipaje_bodega || null,
           es_mas_barato: !d.a_revisar && Number(d.n_validos) >= MIN_VENDEDORES_COMPARACION && d.min_sin_fee !== null
             && Number(d.precio_sin_fee) <= Number(d.min_sin_fee)
         });
